@@ -75,7 +75,7 @@ pnpm clean
 
 - `smoke-build`: install + build + typecheck (Node 22)
 - `smoke-unit`: install + unit tests (Node 22)
-- `smoke-e2e`: install + build + package-load e2e (Node 22)
+- `smoke-e2e`: install + build + packaged integration smoke (Node 22)
 
 ### Full Lanes (automatic + manual `level=full|both`)
 
@@ -85,8 +85,11 @@ pnpm clean
 
 ### CI Execution Controls
 
-- Concurrency key: `ci-${{ github.workflow }}-${{ github.ref }}`
-- In-progress runs on the same ref are canceled when a new run starts
+- Runner image is pinned to `ubuntu-24.04`
+- Node/pnpm versions are centralized in workflow `env`
+- pnpm cache uses `pnpm-lock.yaml` as the dependency cache key
+- Concurrency key: `ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}`
+- In-progress runs are canceled on the same PR/ref, except scheduled runs
 
 ## Release Notes
 

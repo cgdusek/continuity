@@ -93,6 +93,10 @@ CI is defined in `.github/workflows/ci.yml`.
   - verify matrix (Node 22 and 24)
   - full-source 100% coverage gate + artifact upload (Node 22)
   - packaged integration smoke (Node 22)
+- Workflow defaults:
+  - pinned runner image (`ubuntu-24.04`)
+  - centralized Node/pnpm versions
+  - pnpm cache keyed by `pnpm-lock.yaml`
 
 ## Documentation
 
