@@ -1,16 +1,67 @@
 # Continuity
 
-Standalone Continuity plugin package for OpenClaw.
+External OpenClaw continuity context-engine plugin package.
 
-This repo intentionally contains the external plugin wrapper only. The runtime continuity implementation is provided by OpenClaw through `openclaw/plugin-sdk/continuity`.
+This repository intentionally ships a **thin wrapper** only. Core continuity behavior lives in OpenClaw's runtime SDK module: `openclaw/plugin-sdk/continuity`.
 
-## Install
+## What This Package Provides
 
-1. Build the package: `pnpm build`
-2. Deploy it into a local OpenClaw extension directory: `bash scripts/deploy-dev.sh`
-3. Enable the slot: `openclaw config set plugins.slots.contextEngine continuity`
+- Plugin registration (`id: continuity`, `kind: context-engine`)
+- Context engine registration for the continuity slot
+- Gateway method passthrough endpoints:
+  - `continuity.status`
+  - `continuity.list`
+  - `continuity.patch`
+  - `continuity.explain`
+- Continuity CLI registration (`continuity` command namespace)
 
 ## Requirements
 
-- OpenClaw `2026.3.3` or newer
-- A build that exports `openclaw/plugin-sdk/continuity`
+- Node.js `>=22.12.0`
+- pnpm `10.23.0` (or compatible pnpm 10.x)
+- OpenClaw version that exports `openclaw/plugin-sdk/continuity` (peer dependency: `>=2026.3.2`)
+
+## Install And Build
+
+```bash
+pnpm install --frozen-lockfile
+pnpm build
+```
+
+## Local Deploy To OpenClaw
+
+```bash
+bash scripts/deploy-dev.sh
+openclaw config set plugins.slots.contextEngine continuity
+```
+
+`deploy-dev.sh` copies the repository into `${OPENCLAW_PLUGIN_ROOT:-$HOME/.openclaw/extensions}/continuity` after building.
+
+## Test Commands
+
+```bash
+pnpm test:unit
+pnpm test:coverage
+pnpm test:e2e
+pnpm typecheck
+```
+
+## CI Summary
+
+CI is defined in `.github/workflows/ci.yml`.
+
+- Pull requests run smoke lanes:
+  - build + typecheck
+  - unit tests
+  - package-load e2e
+- Pushes to `main`, scheduled runs, and manual full dispatch run extended lanes (multi-node verify, coverage, e2e).
+
+## Documentation System
+
+- Agent/operator guide: [AGENTS.md](AGENTS.md)
+- Full docs index: [docs/README.md](docs/README.md)
+- Architecture: [docs/architecture.md](docs/architecture.md)
+- Gateway API: [docs/gateway-api.md](docs/gateway-api.md)
+- Configuration schema: [docs/configuration.md](docs/configuration.md)
+- Development + CI workflow: [docs/development-and-ci.md](docs/development-and-ci.md)
+- Repository map: [docs/repo-map.md](docs/repo-map.md)
