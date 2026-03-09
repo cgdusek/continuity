@@ -2,6 +2,8 @@ name: ci
 
 on:
   pull_request:
+    branches:
+      - dev
   push:
     branches:
       - main
@@ -29,8 +31,8 @@ concurrency:
 jobs:
   smoke-build:
     if: >-
-      github.event_name == 'pull_request' ||
-      (github.event_name == 'workflow_dispatch' && (inputs.level == 'smoke' || inputs.level == 'both'))
+      github.event_name == 'workflow_dispatch' &&
+      (inputs.level == 'smoke' || inputs.level == 'both')
     name: smoke / build + typecheck
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -49,8 +51,8 @@ jobs:
 
   smoke-unit:
     if: >-
-      github.event_name == 'pull_request' ||
-      (github.event_name == 'workflow_dispatch' && (inputs.level == 'smoke' || inputs.level == 'both'))
+      github.event_name == 'workflow_dispatch' &&
+      (inputs.level == 'smoke' || inputs.level == 'both')
     name: smoke / unit
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -68,8 +70,8 @@ jobs:
 
   smoke-e2e:
     if: >-
-      github.event_name == 'pull_request' ||
-      (github.event_name == 'workflow_dispatch' && (inputs.level == 'smoke' || inputs.level == 'both'))
+      github.event_name == 'workflow_dispatch' &&
+      (inputs.level == 'smoke' || inputs.level == 'both')
     name: smoke / e2e package load
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -88,6 +90,7 @@ jobs:
 
   full-verify:
     if: >-
+      github.event_name == 'pull_request' ||
       github.event_name == 'push' ||
       github.event_name == 'schedule' ||
       (github.event_name == 'workflow_dispatch' && (inputs.level == 'full' || inputs.level == 'both'))
@@ -116,6 +119,7 @@ jobs:
 
   full-coverage:
     if: >-
+      github.event_name == 'pull_request' ||
       github.event_name == 'push' ||
       github.event_name == 'schedule' ||
       (github.event_name == 'workflow_dispatch' && (inputs.level == 'full' || inputs.level == 'both'))
@@ -140,6 +144,7 @@ jobs:
 
   full-e2e:
     if: >-
+      github.event_name == 'pull_request' ||
       github.event_name == 'push' ||
       github.event_name == 'schedule' ||
       (github.event_name == 'workflow_dispatch' && (inputs.level == 'full' || inputs.level == 'both'))
