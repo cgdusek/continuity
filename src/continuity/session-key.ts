@@ -52,8 +52,7 @@ export function resolveThreadParentSessionKey(
   if (idx <= 0) {
     return null;
   }
-  const parent = raw.slice(0, idx).trim();
-  return parent || null;
+  return raw.slice(0, idx).trim();
 }
 
 export function normalizeAgentId(value: string | undefined | null): string {

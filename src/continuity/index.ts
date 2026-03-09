@@ -1,4 +1,3 @@
-/* v8 ignore file */
 export {
   CONTINUITY_FILE_BY_KIND,
   CONTINUITY_KIND_ORDER,

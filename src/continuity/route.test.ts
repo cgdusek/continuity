@@ -30,7 +30,7 @@ function makeResponse(): MockResponse {
 function makeRequest(params: {
   method: string;
   url: string;
-  body?: string;
+  body?: string | Buffer;
   headers?: Record<string, string>;
 }): IncomingMessage {
   const stream = Readable.from(params.body ? [params.body] : []);
@@ -41,8 +41,8 @@ function makeRequest(params: {
   return req;
 }
 
-function createHarness() {
-  let config: Record<string, unknown> = {
+function createHarness(options?: { initialConfig?: Record<string, unknown> }) {
+  let config: Record<string, unknown> = options?.initialConfig ?? {
     plugins: {
       slots: {
         contextEngine: "continuity",
@@ -154,28 +154,42 @@ describe("continuity route", () => {
     expect(harness.service.status).toHaveBeenCalledWith(undefined);
   });
 
-  it("handles approve/reject/remove POST review actions", async () => {
+  it("treats a missing request method as GET once the route path matches", async () => {
     const harness = createHarness();
-    const req = makeRequest({
-      method: "POST",
-      url: continuityRoutePath,
-      body: new URLSearchParams({
-        action: "approve",
-        id: "cont_1",
-        agent: "alpha",
-      }).toString(),
-    });
+    const req = makeRequest({ method: "GET", url: continuityRoutePath });
+    req.method = undefined;
     const res = makeResponse();
 
     await expect(harness.handler(req, res)).resolves.toBe(true);
 
-    expect(harness.service.patch).toHaveBeenCalledWith({
-      agentId: "alpha",
-      id: "cont_1",
-      action: "approve",
-    });
-    expect(res.statusCode).toBe(303);
-    expect(res.headers.Location).toBe(continuityRoutePath);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain("Continuity Dashboard");
+  });
+
+  it("handles approve/reject/remove POST review actions", async () => {
+    const harness = createHarness();
+    for (const action of ["approve", "reject", "remove"] as const) {
+      const req = makeRequest({
+        method: "POST",
+        url: continuityRoutePath,
+        body: new URLSearchParams({
+          action,
+          id: "cont_1",
+          agent: "alpha",
+        }).toString(),
+      });
+      const res = makeResponse();
+
+      await expect(harness.handler(req, res)).resolves.toBe(true);
+
+      expect(harness.service.patch).toHaveBeenLastCalledWith({
+        agentId: "alpha",
+        id: "cont_1",
+        action,
+      });
+      expect(res.statusCode).toBe(303);
+      expect(res.headers.Location).toBe(continuityRoutePath);
+    }
   });
 
   it("persists capture/recall toggle changes into plugins.entries.continuity.config", async () => {
@@ -303,12 +317,58 @@ describe("continuity route", () => {
     expect(harness.service.patch).not.toHaveBeenCalled();
   });
 
+  it("creates missing plugin config scaffolding and clears unchecked booleans", async () => {
+    const harness = createHarness({
+      initialConfig: {},
+    });
+    const req = makeRequest({
+      method: "POST",
+      url: continuityRoutePath,
+      body: Buffer.from(
+        new URLSearchParams({
+          action: "save-config",
+          captureMainDirect: "review",
+          captureMinConfidence: "not-a-number",
+          recallMaxItems: "not-a-number",
+        }).toString(),
+      ),
+    });
+    const res = makeResponse();
+
+    await expect(harness.handler(req, res)).resolves.toBe(true);
+
+    expect((harness.getConfig() as { plugins?: { entries?: Record<string, { config?: unknown }> } })
+      .plugins?.entries?.continuity?.config).toMatchObject({
+      capture: {
+        mainDirect: "review",
+        pairedDirect: "review",
+        group: "off",
+        channel: "off",
+        minConfidence: 0.75,
+      },
+      review: {
+        autoApproveMain: false,
+        requireSource: false,
+      },
+      recall: {
+        maxItems: 4,
+        includeOpenLoops: false,
+      },
+    });
+    expect(res.statusCode).toBe(303);
+  });
+
   it("returns false for unrelated paths and 405 for unsupported methods", async () => {
     const harness = createHarness();
 
     const otherPathReq = makeRequest({ method: "GET", url: "/plugins/other" });
     const otherPathRes = makeResponse();
     await expect(harness.handler(otherPathReq, otherPathRes)).resolves.toBe(false);
+
+    const missingUrlReq = makeRequest({ method: "GET", url: "/plugins/other" });
+    missingUrlReq.url = undefined;
+    const missingUrlRes = makeResponse();
+    await expect(harness.handler(missingUrlReq, missingUrlRes)).resolves.toBe(false);
 
     const putReq = makeRequest({ method: "PUT", url: continuityRoutePath });
     const putRes = makeResponse();
@@ -348,6 +408,34 @@ describe("continuity route", () => {
     );
   });
 
+  it("formats non-Error POST failures safely", async () => {
+    const harness = createHarness();
+    const logger = {
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+    harness.runtime.config.writeConfigFile = async () => {
+      throw "write failed";
+    };
+    const handler = createContinuityRouteHandler({
+      runtime: harness.runtime as never,
+      service: harness.service as never,
+      logger,
+    });
+
+    const req = makeRequest({
+      method: "POST",
+      url: continuityRoutePath,
+      body: new URLSearchParams({ action: "slot-enable" }).toString(),
+    });
+    const res = makeResponse();
+
+    await expect(handler(req, res)).resolves.toBe(true);
+    expect(res.statusCode).toBe(500);
+    expect(logger.error).toHaveBeenCalledWith("continuity route POST failed: write failed");
+  });
+
   it("returns 500 when GET rendering fails", async () => {
     const harness = createHarness();
     const logger = {
@@ -371,5 +459,74 @@ describe("continuity route", () => {
     expect(logger.error).toHaveBeenCalledWith(
       "continuity route GET failed: status failed",
     );
+  });
+
+  it("formats non-Error GET failures safely", async () => {
+    const harness = createHarness();
+    const logger = {
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+    harness.service.status.mockRejectedValue("status failed");
+    const handler = createContinuityRouteHandler({
+      runtime: harness.runtime as never,
+      service: harness.service as never,
+      logger,
+    });
+
+    const req = makeRequest({ method: "GET", url: continuityRoutePath });
+    const res = makeResponse();
+
+    await expect(handler(req, res)).resolves.toBe(true);
+    expect(res.statusCode).toBe(500);
+    expect(logger.error).toHaveBeenCalledWith("continuity route GET failed: status failed");
+  });
+
+  it("leaves unrelated slot selections unchanged and ignores empty actions", async () => {
+    const harness = createHarness({
+      initialConfig: {
+        plugins: {
+          slots: {
+            contextEngine: "other",
+          },
+        },
+      },
+    });
+
+    const disableReq = makeRequest({
+      method: "POST",
+      url: continuityRoutePath,
+      body: new URLSearchParams({ action: "slot-disable" }).toString(),
+    });
+    const disableRes = makeResponse();
+    await expect(harness.handler(disableReq, disableRes)).resolves.toBe(true);
+    expect((harness.getConfig() as { plugins?: { slots?: Record<string, unknown> } }).plugins?.slots?.contextEngine).toBe("other");
+
+    const noActionReq = makeRequest({
+      method: "POST",
+      url: continuityRoutePath,
+      body: new URLSearchParams({ id: "cont_1" }).toString(),
+    });
+    const noActionRes = makeResponse();
+    await expect(harness.handler(noActionReq, noActionRes)).resolves.toBe(true);
+    expect(harness.service.patch).not.toHaveBeenCalled();
+  });
+
+  it("creates plugin slot scaffolding when enabling continuity from an empty config", async () => {
+    const harness = createHarness({
+      initialConfig: {},
+    });
+    const req = makeRequest({
+      method: "POST",
+      url: continuityRoutePath,
+      body: new URLSearchParams({ action: "slot-enable" }).toString(),
+    });
+    const res = makeResponse();
+
+    await expect(harness.handler(req, res)).resolves.toBe(true);
+    expect((harness.getConfig() as { plugins?: { slots?: Record<string, unknown> } }).plugins?.slots)
+      .toEqual({ contextEngine: "continuity" });
+    expect(res.statusCode).toBe(303);
   });
 });

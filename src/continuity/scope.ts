@@ -125,11 +125,7 @@ function normalizeSessionRest(key?: string): string | undefined {
   const parsed = parseAgentSessionKey(trimmed);
   const scoped = parsed?.rest ?? trimmed;
   const threadParent = resolveThreadParentSessionKey(scoped) ?? scoped;
-  const normalized = threadParent.toLowerCase();
-  if (!normalized) {
-    return undefined;
-  }
-  return normalized;
+  return threadParent.toLowerCase();
 }
 
 function resolveChannel(parts: string[]): string | undefined {

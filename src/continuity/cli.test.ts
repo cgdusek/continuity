@@ -32,6 +32,19 @@ describe("registerContinuityCli", () => {
     expect(logSpy).toHaveBeenCalledWith("ready");
   });
 
+  it("prints object status payloads as json when requested", async () => {
+    const logSpy = vi.spyOn(defaultRuntime, "log").mockImplementation(() => {});
+    const service = {
+      status: vi.fn().mockResolvedValue({ enabled: true }),
+    };
+    const program = makeProgram(service);
+
+    await program.parseAsync(["continuity", "status", "--json"], { from: "user" });
+
+    expect(service.status).toHaveBeenCalledWith(undefined);
+    expect(logSpy).toHaveBeenCalledWith(JSON.stringify({ enabled: true }, null, 2));
+  });
+
   it("passes parsed review filters through and prints json when requested", async () => {
     const logSpy = vi.spyOn(defaultRuntime, "log").mockImplementation(() => {});
     const records = [{ id: "cont_1", reviewState: "approved" }];

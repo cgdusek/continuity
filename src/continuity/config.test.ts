@@ -145,4 +145,20 @@ describe("resolveContinuityConfig", () => {
 
     expect(resolved.recall.scope.default).toBe("allow");
   });
+
+  it("clones sparse custom scope rules that omit match objects", () => {
+    const resolved = resolveContinuityConfig({
+      recall: {
+        scope: {
+          default: "deny",
+          rules: [undefined, { action: "allow" }],
+        },
+      },
+    });
+
+    expect(resolved.recall.scope).toEqual({
+      default: "deny",
+      rules: [undefined, { action: "allow", match: undefined }],
+    });
+  });
 });

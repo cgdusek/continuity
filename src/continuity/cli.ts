@@ -51,7 +51,7 @@ export function registerContinuityCli(params: {
         state?: ContinuityReviewState | "all";
         kind?: ContinuityKind | "all";
         source?: ContinuitySourceClass | "all";
-        limit?: string;
+        limit: string;
         json?: boolean;
       }) => {
         const service = await params.ensureService();
@@ -61,7 +61,7 @@ export function registerContinuityCli(params: {
             state: opts.state,
             kind: opts.kind,
             sourceClass: opts.source,
-            limit: Number.parseInt(opts.limit ?? "50", 10) || 50,
+            limit: Number.parseInt(opts.limit, 10) || 50,
           },
         });
         printPayload(records, opts.json);

@@ -15,6 +15,8 @@ describe("session-key helpers", () => {
       agentId: "alpha",
       rest: "main",
     });
+    expect(parseAgentSessionKey(undefined)).toBeNull();
+    expect(parseAgentSessionKey(null)).toBeNull();
     expect(parseAgentSessionKey("   ")).toBeNull();
     expect(parseAgentSessionKey("agent: :main")).toBeNull();
     expect(parseAgentSessionKey("agent:alpha:")).toBeNull();
@@ -24,6 +26,9 @@ describe("session-key helpers", () => {
   it("resolves thread parent keys", () => {
     expect(resolveThreadParentSessionKey("agent:alpha:main:thread:42")).toBe("agent:alpha:main");
     expect(resolveThreadParentSessionKey("agent:alpha:main:topic:ops")).toBe("agent:alpha:main");
+    expect(resolveThreadParentSessionKey(undefined)).toBeNull();
+    expect(resolveThreadParentSessionKey(null)).toBeNull();
+    expect(resolveThreadParentSessionKey(":thread:42")).toBeNull();
     expect(resolveThreadParentSessionKey("agent:alpha:main")).toBeNull();
     expect(resolveThreadParentSessionKey("   ")).toBeNull();
   });

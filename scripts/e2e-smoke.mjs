@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { pathToFileURL } from "node:url";
+import { Command } from "commander";
 
 const packageDir = process.argv[2];
 if (!packageDir) {
@@ -16,6 +17,13 @@ await fs.mkdir(path.dirname(hostPluginRoot), { recursive: true });
 await fs.cp(packageDir, hostPluginRoot, { recursive: true });
 
 const packageJson = JSON.parse(await fs.readFile(path.join(hostPluginRoot, "package.json"), "utf8"));
+const pluginManifest = JSON.parse(
+  await fs.readFile(path.join(hostPluginRoot, "openclaw.plugin.json"), "utf8"),
+);
+assert.equal(pluginManifest.id, "continuity");
+assert.equal(pluginManifest.kind, "context-engine");
+assert.ok(packageJson.files.includes("dist/"));
+assert.ok(packageJson.files.includes("openclaw.plugin.json"));
 const entry = packageJson.openclaw.extensions[0].replace(/^\.\//, "");
 const pluginUrl = pathToFileURL(path.join(hostPluginRoot, entry)).href;
 const plugin = (await import(pluginUrl)).default;
@@ -82,6 +90,26 @@ const callMethod = async (name, params) => {
   return calls.at(-1);
 };
 
+const runCli = async (argv) => {
+  const program = new Command();
+  program.exitOverride();
+  cli[0].registrar({ program });
+
+  const logs = [];
+  const originalLog = console.log;
+  console.log = (...args) => {
+    logs.push(args.map((arg) => String(arg)).join(" "));
+  };
+
+  try {
+    await program.parseAsync(argv, { from: "user" });
+  } finally {
+    console.log = originalLog;
+  }
+
+  return logs;
+};
+
 assert.equal((await callMethod("continuity.status", { agentId: "alpha" }))[0], true);
 assert.equal((await callMethod("continuity.list", { kind: "preference", limit: "5" }))[0], true);
 assert.deepEqual(await callMethod("continuity.patch", { id: "cont_missing", action: "approve" }), [
@@ -109,7 +137,35 @@ await engine.afterTurn({
   },
 });
 
-const hookResult = await hooks.get("before_prompt_build")(
+await engine.afterTurn({
+  sessionId: "session-2",
+  sessionFile: path.join(stateDir, "sessions", "session-2.jsonl"),
+  messages: [
+    { role: "user", content: "Remember this: my timezone is America/Chicago." },
+    { role: "assistant", content: "I will remember that." },
+  ],
+  prePromptMessageCount: 0,
+  runtimeContext: {
+    sessionKey: "telegram:direct:alice",
+  },
+});
+
+const pendingList = await callMethod("continuity.list", {
+  state: "pending",
+  kind: "fact",
+  sourceClass: "paired_direct",
+});
+assert.equal(pendingList[0], true);
+assert.equal(pendingList[1].length, 1);
+const pendingRecord = pendingList[1][0];
+
+const cliStatusOutput = await runCli(["continuity", "status", "--json"]);
+assert.equal(JSON.parse(cliStatusOutput.at(-1)).enabled, true);
+
+const cliReviewOutput = await runCli(["continuity", "review", "--state", "pending", "--json"]);
+assert.ok(JSON.parse(cliReviewOutput.at(-1)).some((record) => record.id === pendingRecord.id));
+
+let hookResult = await hooks.get("before_prompt_build")(
   {
     prompt: "How do I like updates?",
     messages: [{ role: "user", content: "How do I like updates?" }],
@@ -120,6 +176,8 @@ const hookResult = await hooks.get("before_prompt_build")(
   },
 );
 assert.ok(hookResult?.prependSystemContext?.includes("<continuity>"));
+assert.ok(hookResult?.prependSystemContext?.includes("Preference: I prefer concise status updates."));
+assert.ok(!hookResult?.prependSystemContext?.includes("America/Chicago"));
 
 function makeRequest({ method, url, body }) {
   const stream = Readable.from(body ? [body] : []);
@@ -151,6 +209,84 @@ const handled = await routes[0].handler(routeReq, routeRes);
 assert.equal(handled, true);
 assert.equal(routeRes.statusCode, 200);
 assert.ok(routeRes.body.includes("Continuity Dashboard"));
+assert.ok(routeRes.body.includes(pendingRecord.id));
+
+const saveConfigReq = makeRequest({
+  method: "POST",
+  url: "/plugins/continuity",
+  body: new URLSearchParams({
+    action: "save-config",
+    captureMainDirect: "review",
+    capturePairedDirect: "auto",
+    captureGroup: "off",
+    captureChannel: "off",
+    captureMinConfidence: "0.61",
+    reviewAutoApproveMain: "false",
+    reviewRequireSource: "false",
+    recallMaxItems: "6",
+    recallIncludeOpenLoops: "false",
+  }).toString(),
+});
+const saveConfigRes = makeResponse();
+await routes[0].handler(saveConfigReq, saveConfigRes);
+assert.equal(saveConfigRes.statusCode, 303);
+assert.deepEqual(config.plugins?.entries?.continuity?.config, {
+  capture: {
+    mainDirect: "review",
+    pairedDirect: "auto",
+    group: "off",
+    channel: "off",
+    minConfidence: 0.61,
+  },
+  review: {
+    autoApproveMain: false,
+    requireSource: false,
+  },
+  recall: {
+    maxItems: 6,
+    includeOpenLoops: false,
+    scope: {
+      default: "deny",
+      rules: [{ action: "allow", match: { chatType: "direct" } }],
+    },
+  },
+});
+
+const approveReq = makeRequest({
+  method: "POST",
+  url: "/plugins/continuity",
+  body: new URLSearchParams({ action: "approve", id: pendingRecord.id }).toString(),
+});
+const approveRes = makeResponse();
+await routes[0].handler(approveReq, approveRes);
+assert.equal(approveRes.statusCode, 303);
+
+const explainApproved = await callMethod("continuity.explain", { id: pendingRecord.id });
+assert.equal(explainApproved[0], true);
+assert.equal(explainApproved[1].markdownPath, "memory/continuity/facts.md");
+
+const factsPath = path.join(workspaceDir, "memory", "continuity", "facts.md");
+const factsMarkdown = await fs.readFile(factsPath, "utf8");
+assert.ok(factsMarkdown.includes("America/Chicago"));
+
+hookResult = await hooks.get("before_prompt_build")(
+  {
+    prompt: "What is my timezone again?",
+    messages: [{ role: "user", content: "What is my timezone again?" }],
+  },
+  {
+    agentId: "main",
+    sessionKey: "discord:direct:owner",
+  },
+);
+assert.ok(hookResult?.prependSystemContext?.includes("America/Chicago"));
+
+const removeResult = await callMethod("continuity.patch", {
+  id: pendingRecord.id,
+  action: "remove",
+});
+assert.deepEqual(removeResult, [true, { ok: true, removedId: pendingRecord.id }]);
+assert.ok(!(await fs.readFile(factsPath, "utf8")).includes("America/Chicago"));
 
 const routePostReq = makeRequest({
   method: "POST",

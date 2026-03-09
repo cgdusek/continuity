@@ -30,6 +30,20 @@ describe("extractTextFromChatContent", () => {
     ).toBe("first second");
   });
 
+  it("sanitizes text blocks inside array payloads", () => {
+    expect(
+      extractTextFromChatContent(
+        [
+          { type: "text", text: " first " },
+          { type: "text", text: "second" },
+        ],
+        {
+          sanitizeText: (value) => value.toUpperCase(),
+        },
+      ),
+    ).toBe("FIRST SECOND");
+  });
+
   it("returns null when array has no non-empty text blocks", () => {
     expect(
       extractTextFromChatContent([

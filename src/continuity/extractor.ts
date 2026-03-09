@@ -36,10 +36,6 @@ function sanitizeText(text: string, role: "user" | "assistant"): string {
 }
 
 function looksLikePromptInjection(text: string): boolean {
-  /* v8 ignore next */
-  if (!text) {
-    return false;
-  }
   return PROMPT_INJECTION_PATTERNS.some((pattern) => pattern.test(text));
 }
 

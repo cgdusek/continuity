@@ -87,6 +87,15 @@ describe("extractContinuityMatches", () => {
     expect(matches[1]?.text).toBe("I will use Bun for that.");
   });
 
+  it("ignores assistant messages that do not express a continuity commitment", () => {
+    const matches = extractContinuityMatches({
+      sessionId: "session-assistant-noop",
+      messages: [makeMessage("Acknowledged.", "assistant")],
+    });
+
+    expect(matches).toEqual([]);
+  });
+
   it("keeps dotted values intact when extracting continuity facts", () => {
     const matches = extractContinuityMatches({
       sessionId: "session-fact-values",

@@ -31,7 +31,7 @@ pnpm test:e2e
 Notes:
 
 - `test:unit` runs `vitest run` for `src/**/*.test.ts`.
-- `test:coverage` uses V8 coverage and enforces 100% thresholds for `src/index.ts` (per `vitest.config.ts`).
+- `test:coverage` uses V8 coverage and enforces 100% thresholds for all runtime source files under `src/`, excluding tests, declaration files, the type-only continuity schema types, and the continuity barrel file (per `vitest.config.ts`).
 
 Clean artifacts:
 
@@ -54,7 +54,8 @@ pnpm clean
 - Packs the npm tarball into `.tmp/e2e/`
 - Extracts it under `.tmp/e2e/unpacked/package`
 - Runs `node scripts/e2e-smoke.mjs <package-dir>`
-- Asserts package load + registration behavior against a simulated host
+- Asserts tarball packaging guarantees (`dist/`, `openclaw.plugin.json`)
+- Asserts package load, registration, CLI wiring, gateway methods, route POST actions, review flow, markdown materialization, and recall behavior against a simulated host
 
 ## CI Workflow (`.github/workflows/ci.yml`)
 
@@ -79,8 +80,8 @@ pnpm clean
 ### Full Lanes (automatic + manual `level=full|both`)
 
 - `full-verify` on Node 22 and 24: build + typecheck + unit tests
-- `full-coverage` on Node 22: coverage run + artifact upload
-- `full-e2e` on Node 22: package-load e2e
+- `full-coverage` on Node 22: full-source 100% coverage gate + artifact upload
+- `full-e2e` on Node 22: packaged integration smoke
 
 ### CI Execution Controls
 

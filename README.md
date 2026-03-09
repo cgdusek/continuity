@@ -73,6 +73,8 @@ Optional full local test lane:
 pnpm test:coverage
 ```
 
+`test:coverage` enforces 100% coverage across the runtime source tree under `src/`, excluding tests, declaration files, the type-only continuity schema types, and the continuity barrel file.
+
 ## CI Summary
 
 CI is defined in `.github/workflows/ci.yml`.
@@ -86,11 +88,11 @@ CI is defined in `.github/workflows/ci.yml`.
 - Smoke lanes (manual only for `smoke|both`):
   - build + typecheck (Node 22)
   - unit tests (Node 22)
-  - e2e package-load test (Node 22)
+  - packaged integration smoke (Node 22)
 - Full lanes (automatic + manual `full|both`):
   - verify matrix (Node 22 and 24)
-  - coverage run + artifact upload (Node 22)
-  - e2e package-load test (Node 22)
+  - full-source 100% coverage gate + artifact upload (Node 22)
+  - packaged integration smoke (Node 22)
 
 ## Documentation
 
