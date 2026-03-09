@@ -2,9 +2,9 @@
 
 ## Purpose
 
-The plugin is an external wrapper that delegates continuity behavior to OpenClaw's SDK runtime module.
+The plugin is an external wrapper that delegates continuity behavior to OpenClaw's SDK module (`openclaw/plugin-sdk/continuity`).
 
-## Runtime Flow
+## Runtime Lifecycle
 
 1. OpenClaw loads plugin entrypoint from `dist/index.js`.
 2. `register(api)` resolves plugin config via `resolveContinuityConfig(api.pluginConfig)`.
@@ -13,6 +13,9 @@ The plugin is an external wrapper that delegates continuity behavior to OpenClaw
    - context engine `continuity`
    - gateway methods (`status`, `list`, `patch`, `explain`)
    - CLI registrar (`continuity` command namespace)
+5. Context engine factory constructs `new ContinuityContextEngine(ensureService())`.
+
+The wrapper does not register HTTP routes and does not implement continuity extraction/recall logic itself.
 
 ## Design Constraints
 
