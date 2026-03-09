@@ -1,12 +1,41 @@
 name: ci
 
 on:
-  push:
   pull_request:
+    branches:
+      - dev
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+    inputs:
+      level:
+        description: "Choose which CI lane to run"
+        required: true
+        default: full
+        type: choice
+        options:
+          - smoke
+          - full
+          - both
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build:
+  smoke-build:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      (inputs.level == 'smoke' || inputs.level == 'both')
+    name: smoke / build + typecheck
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -20,8 +49,13 @@ jobs:
       - run: pnpm build
       - run: pnpm typecheck
 
-  unit:
+  smoke-unit:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      (inputs.level == 'smoke' || inputs.level == 'both')
+    name: smoke / unit
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -32,10 +66,91 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm test
+      - run: pnpm test:unit
 
-  e2e:
+  smoke-e2e:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      (inputs.level == 'smoke' || inputs.level == 'both')
+    name: smoke / e2e package load
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.23.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm test:e2e
+
+  full-verify:
+    if: >-
+      github.event_name == 'pull_request' ||
+      github.event_name == 'push' ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && (inputs.level == 'full' || inputs.level == 'both'))
+    name: full / node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        node:
+          - 22
+          - 24
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.23.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm typecheck
+      - run: pnpm test:unit
+
+  full-coverage:
+    if: >-
+      github.event_name == 'pull_request' ||
+      github.event_name == 'push' ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && (inputs.level == 'full' || inputs.level == 'both'))
+    name: full / coverage (node 22)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.23.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:coverage
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-node-22
+          path: coverage/
+
+  full-e2e:
+    if: >-
+      github.event_name == 'pull_request' ||
+      github.event_name == 'push' ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && (inputs.level == 'full' || inputs.level == 'both'))
+    name: full / e2e package load
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

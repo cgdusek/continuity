@@ -23,7 +23,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "clean": "rm -rf coverage dist .tmp",
-    "test": "vitest run --coverage",
+    "test": "pnpm run test:coverage",
+    "test:unit": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:e2e": "bash scripts/test-e2e.sh",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
