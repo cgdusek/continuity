@@ -40,6 +40,7 @@
 ## Scripts
 
 - `scripts/deploy-dev.sh`: build + copy package into local OpenClaw extension directory
+- `scripts/run-dev.sh`: build Continuity, link it into a local `openclaw@latest` install, and run a loopback dev gateway with printed UI links
 - `scripts/test-e2e.sh`: pack tarball, unpack, and execute packaged integration smoke harness
 - `scripts/e2e-smoke.mjs`: simulated host load that validates packaging, registration, CLI, gateway, route review/config actions, materialization, and recall for packaged output
 

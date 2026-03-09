@@ -47,6 +47,18 @@ pnpm clean
 - Copies repository content to `${OPENCLAW_PLUGIN_ROOT:-$HOME/.openclaw/extensions}/continuity`
 - Excludes `.git`, `coverage`, `node_modules`, and `.tmp`
 
+## Local Dev Launcher
+
+`bash scripts/run-dev.sh`
+
+- Resolves `openclaw@latest` from npm at runtime
+- Installs or updates a local OpenClaw copy under `.tmp/run-dev/openclaw`
+- Builds the plugin and links this repository into the local OpenClaw install
+- Keeps OpenClaw config, state, and workspace under `.tmp/run-dev/`
+- Starts a loopback-only gateway with `auth none` on port `19001`
+- Prints the local Gateway WS URL, Gateway UI URL, and Continuity plugin UI URL before startup
+- Supports overrides through `CONTINUITY_DEV_ROOT`, `CONTINUITY_OPENCLAW_DIR`, `CONTINUITY_OPENCLAW_STATE_DIR`, `CONTINUITY_OPENCLAW_CONFIG_PATH`, `CONTINUITY_OPENCLAW_WORKSPACE_DIR`, `CONTINUITY_GATEWAY_PORT`, and loopback-only `CONTINUITY_GATEWAY_HOST`
+
 ## E2E Packaging Harness
 
 `bash scripts/test-e2e.sh`

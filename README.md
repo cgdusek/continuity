@@ -58,6 +58,32 @@ openclaw config set plugins.slots.contextEngine continuity
 
 `deploy-dev.sh` builds and copies the repository into `${OPENCLAW_PLUGIN_ROOT:-$HOME/.openclaw/extensions}/continuity` (excluding `.git`, `coverage`, `node_modules`, and `.tmp`).
 
+## Local Dev Gateway
+
+```bash
+bash scripts/run-dev.sh
+```
+
+`run-dev.sh` resolves `openclaw@latest` from npm at runtime, installs or updates a local copy under `.tmp/run-dev/openclaw`, builds this plugin, links the repository into that local OpenClaw instance, and starts a loopback-only gateway with no auth on port `19001`.
+
+The script prints the local endpoints before startup:
+
+- Gateway WS: `ws://127.0.0.1:19001`
+- Gateway UI: `http://127.0.0.1:19001/`
+- Continuity UI: `http://127.0.0.1:19001/plugins/continuity`
+
+The launcher keeps its config, state, and workspace under `.tmp/run-dev/` so it does not reuse the default `~/.openclaw` directories.
+
+Override points are exposed via environment variables:
+
+- `CONTINUITY_DEV_ROOT`
+- `CONTINUITY_OPENCLAW_DIR`
+- `CONTINUITY_OPENCLAW_STATE_DIR`
+- `CONTINUITY_OPENCLAW_CONFIG_PATH`
+- `CONTINUITY_OPENCLAW_WORKSPACE_DIR`
+- `CONTINUITY_GATEWAY_PORT`
+- `CONTINUITY_GATEWAY_HOST` (`127.0.0.1`, `localhost`, or `::1` only)
+
 ## Validation Commands
 
 ```bash
