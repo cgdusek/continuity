@@ -1,20 +1,17 @@
-import type {
-  ContinuityKind,
-  ContinuityPatchAction,
-  ContinuityReviewState,
-  ContinuityService,
-  ContinuitySourceClass,
-  GatewayRequestHandlerOptions,
-  OpenClawPluginApi,
-} from "openclaw/plugin-sdk/continuity";
+import type { GatewayRequestHandlerOptions, OpenClawPluginApi } from "openclaw/plugin-sdk";
+import { ErrorCodes, errorShape } from "./continuity/errors.js";
+import { ContinuityContextEngine } from "./continuity/engine.js";
+import { createContinuityRouteHandler, continuityRoutePath } from "./continuity/route.js";
+import { createContinuityService } from "./continuity/service.js";
 import {
-  ContinuityContextEngine,
-  ErrorCodes,
-  createContinuityService,
-  errorShape,
   registerContinuityCli,
   resolveContinuityConfig,
-} from "openclaw/plugin-sdk/continuity";
+  type ContinuityAgentMessage,
+  type ContinuityKind,
+  type ContinuityPatchAction,
+  type ContinuityReviewState,
+  type ContinuitySourceClass,
+} from "./continuity/index.js";
 
 function readOptionalString(params: Record<string, unknown>, key: string): string | undefined {
   const value = params[key];
@@ -81,21 +78,55 @@ function sendInvalid(respond: GatewayRequestHandlerOptions["respond"], message: 
   respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, message));
 }
 
+function toContinuityMessages(messages: unknown[]): ContinuityAgentMessage[] {
+  const normalized: ContinuityAgentMessage[] = [];
+  for (const message of messages) {
+    if (!message || typeof message !== "object") {
+      continue;
+    }
+    const role = (message as { role?: unknown }).role;
+    if (typeof role !== "string") {
+      continue;
+    }
+    normalized.push({
+      role,
+      content: (message as { content?: unknown }).content,
+      timestamp:
+        typeof (message as { timestamp?: unknown }).timestamp === "number"
+          ? (message as { timestamp: number }).timestamp
+          : undefined,
+    });
+  }
+  return normalized;
+}
+
 const plugin = {
   id: "continuity",
   name: "Continuity",
   description: "Cross-channel continuity capture, review, and recall for direct chats.",
   kind: "context-engine",
   register(api: OpenClawPluginApi) {
-    const pluginConfig = resolveContinuityConfig(api.pluginConfig);
-    let service: ContinuityService | null = null;
+    resolveContinuityConfig(api.pluginConfig);
+    let service: ReturnType<typeof createContinuityService> | null = null;
 
-    const ensureService = (): ContinuityService => {
-      service ??= createContinuityService(api.config, pluginConfig);
+    const ensureService = () => {
+      service ??= createContinuityService({
+        config: api.config,
+        runtime: api.runtime,
+        pluginConfig: api.pluginConfig,
+        logger: api.logger,
+      });
       return service;
     };
 
-    api.registerContextEngine("continuity", () => new ContinuityContextEngine(ensureService()));
+    api.registerContextEngine(
+      "continuity",
+      () =>
+        new ContinuityContextEngine({
+          service: ensureService(),
+          logger: api.logger,
+        }),
+    );
 
     api.registerGatewayMethod(
       "continuity.status",
@@ -103,8 +134,8 @@ const plugin = {
         try {
           const status = await ensureService().status(readOptionalString(params, "agentId"));
           respond(true, status);
-        } catch (err) {
-          respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(err)));
+        } catch (error) {
+          respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(error)));
         }
       },
     );
@@ -113,23 +144,18 @@ const plugin = {
       "continuity.list",
       async ({ params, respond }: GatewayRequestHandlerOptions) => {
         try {
-          const agentId = readOptionalString(params, "agentId");
-          const state = readStateFilter(params);
-          const kind = readKindFilter(params);
-          const sourceClass = readSourceFilter(params);
-          const limit = readOptionalPositiveInt(params, "limit");
           const records = await ensureService().list({
-            ...(agentId ? { agentId } : {}),
+            agentId: readOptionalString(params, "agentId"),
             filters: {
-              ...(state ? { state } : {}),
-              ...(kind ? { kind } : {}),
-              ...(sourceClass ? { sourceClass } : {}),
-              ...(typeof limit === "number" ? { limit } : {}),
+              state: readStateFilter(params),
+              kind: readKindFilter(params),
+              sourceClass: readSourceFilter(params),
+              limit: readOptionalPositiveInt(params, "limit"),
             },
           });
           respond(true, records);
-        } catch (err) {
-          respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(err)));
+        } catch (error) {
+          respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(error)));
         }
       },
     );
@@ -144,9 +170,8 @@ const plugin = {
           return;
         }
         try {
-          const agentId = readOptionalString(params, "agentId");
           const result = await ensureService().patch({
-            ...(agentId ? { agentId } : {}),
+            agentId: readOptionalString(params, "agentId"),
             id,
             action,
           });
@@ -159,8 +184,8 @@ const plugin = {
             return;
           }
           respond(true, result);
-        } catch (err) {
-          respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(err)));
+        } catch (error) {
+          respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(error)));
         }
       },
     );
@@ -174,9 +199,8 @@ const plugin = {
           return;
         }
         try {
-          const agentId = readOptionalString(params, "agentId");
           const result = await ensureService().explain({
-            ...(agentId ? { agentId } : {}),
+            agentId: readOptionalString(params, "agentId"),
             id,
           });
           if (!result) {
@@ -188,8 +212,8 @@ const plugin = {
             return;
           }
           respond(true, result);
-        } catch (err) {
-          respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(err)));
+        } catch (error) {
+          respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(error)));
         }
       },
     );
@@ -203,6 +227,35 @@ const plugin = {
       },
       { commands: ["continuity"] },
     );
+
+    api.registerHttpRoute({
+      path: continuityRoutePath,
+      auth: "gateway",
+      match: "exact",
+      handler: createContinuityRouteHandler({
+        runtime: api.runtime,
+        service: ensureService(),
+        logger: api.logger,
+      }),
+    });
+
+    api.on("before_prompt_build", async (event, ctx) => {
+      const config = api.runtime.config.loadConfig();
+      if (config.plugins?.slots?.contextEngine !== "continuity") {
+        return;
+      }
+      const addition = await ensureService().buildSystemPromptAddition({
+        agentId: ctx.agentId,
+        sessionKey: ctx.sessionKey,
+        messages: toContinuityMessages(event.messages),
+      });
+      if (!addition) {
+        return;
+      }
+      return {
+        prependSystemContext: addition,
+      };
+    });
   },
 } as const;
 

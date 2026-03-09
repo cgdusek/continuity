@@ -1,8 +1,17 @@
 # Continuity
 
-Standalone Continuity plugin package for OpenClaw.
+Standalone Continuity context-engine plugin for OpenClaw.
 
-This repo intentionally contains the external plugin wrapper only. The runtime continuity implementation is provided by OpenClaw through `openclaw/plugin-sdk/continuity`.
+This package now owns its continuity runtime implementation. It no longer imports
+`openclaw/plugin-sdk/continuity`; it only depends on the root `openclaw/plugin-sdk` API surface.
+
+## Behavior
+
+- Slot-gated runtime activation via `plugins.slots.contextEngine = "continuity"`
+- Always-available management surfaces:
+  - Gateway RPC: `continuity.status`, `continuity.list`, `continuity.patch`, `continuity.explain`
+  - CLI: `openclaw continuity status|review|approve|reject|rm`
+  - Plugin-owned dashboard route: `GET/POST /plugins/continuity` (gateway auth)
 
 ## Install
 
@@ -12,5 +21,4 @@ This repo intentionally contains the external plugin wrapper only. The runtime c
 
 ## Requirements
 
-- OpenClaw `2026.3.3` or newer
-- A build that exports `openclaw/plugin-sdk/continuity`
+- OpenClaw `2026.3.8` or newer

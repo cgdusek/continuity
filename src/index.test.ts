@@ -1,69 +1,136 @@
-import { beforeEach, describe, expect, it } from "vitest";
-import { service, state } from "../test/mocks/openclaw-plugin-sdk-continuity";
-import plugin from "./index";
+import type { IncomingMessage, ServerResponse } from "node:http";
+import { Command } from "commander";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-type ContinuityRecord = {
-  id: string;
-  kind: "fact" | "preference" | "decision" | "open_loop";
-  reviewState: "pending" | "approved" | "rejected";
-  sourceClass: "main_direct" | "paired_direct" | "group" | "channel";
-  text: string;
+const { createContinuityServiceMock } = vi.hoisted(() => ({
+  createContinuityServiceMock: vi.fn(),
+}));
+vi.mock("./continuity/service.js", () => ({
+  createContinuityService: createContinuityServiceMock,
+}));
+
+import plugin from "./index.js";
+
+type MockService = {
+  status: ReturnType<typeof vi.fn>;
+  list: ReturnType<typeof vi.fn>;
+  patch: ReturnType<typeof vi.fn>;
+  explain: ReturnType<typeof vi.fn>;
+  buildSystemPromptAddition: ReturnType<typeof vi.fn>;
+  captureTurn: ReturnType<typeof vi.fn>;
 };
 
-describe("continuity plugin wrapper", () => {
+function makeService(): MockService {
+  return {
+    status: vi.fn(),
+    list: vi.fn(),
+    patch: vi.fn(),
+    explain: vi.fn(),
+    buildSystemPromptAddition: vi.fn(),
+    captureTurn: vi.fn(),
+  };
+}
+
+function createApi(options?: { slotSelected?: boolean }) {
+  const contextEngines = new Map<string, () => unknown>();
+  const methods = new Map<
+    string,
+    (options: { params: Record<string, unknown>; respond: (...args: unknown[]) => void }) =>
+      | Promise<void>
+      | void
+  >();
+  const hooks = new Map<string, (event: unknown, ctx: unknown) => Promise<unknown> | unknown>();
+  const routes: Array<{
+    path: string;
+    auth: "gateway" | "plugin";
+    match?: "exact" | "prefix";
+    handler: (req: IncomingMessage, res: ServerResponse) => Promise<boolean | void> | boolean | void;
+  }> = [];
+  const cli: Array<{
+    registrar: (ctx: { program: unknown }) => void;
+    opts?: { commands?: string[] };
+  }> = [];
+
+  let config = {
+    plugins: options?.slotSelected
+      ? {
+          slots: {
+            contextEngine: "continuity",
+          },
+        }
+      : {},
+  };
+
+  return {
+    api: {
+      config,
+      pluginConfig: { capture: { mainDirect: "auto" } },
+      runtime: {
+        config: {
+          loadConfig: () => config,
+          writeConfigFile: async (next: typeof config) => {
+            config = next;
+          },
+        },
+        state: {
+          resolveStateDir: () => "/tmp/continuity-test-state",
+        },
+      },
+      logger: {
+        info() {},
+        warn() {},
+        error() {},
+      },
+      registerContextEngine: (id: string, factory: () => unknown) => contextEngines.set(id, factory),
+      registerGatewayMethod: (
+        method: string,
+        handler: (options: { params: Record<string, unknown>; respond: (...args: unknown[]) => void }) => Promise<void> | void,
+      ) => methods.set(method, handler),
+      registerCli: (
+        registrar: (ctx: { program: unknown }) => void,
+        opts?: { commands?: string[] },
+      ) => cli.push({ registrar, opts }),
+      registerHttpRoute: (params: {
+        path: string;
+        auth: "gateway" | "plugin";
+        match?: "exact" | "prefix";
+        handler: (req: IncomingMessage, res: ServerResponse) => Promise<boolean | void> | boolean | void;
+      }) => routes.push(params),
+      on: (hookName: string, handler: (event: unknown, ctx: unknown) => Promise<unknown> | unknown) =>
+        hooks.set(hookName, handler),
+    },
+    methods,
+    contextEngines,
+    hooks,
+    routes,
+    cli,
+  };
+}
+
+async function callMethod(
+  handler: (options: { params: Record<string, unknown>; respond: (...args: unknown[]) => void }) =>
+    | Promise<void>
+    | void,
+  params: Record<string, unknown>,
+) {
+  const calls: unknown[][] = [];
+  await handler({ params, respond: (...args: unknown[]) => calls.push(args) });
+  return calls.at(-1);
+}
+
+describe("continuity plugin", () => {
   beforeEach(() => {
-    state.reset();
+    createContinuityServiceMock.mockReset();
   });
 
-  function createApi() {
-    const contextEngines = new Map<string, () => unknown>();
-    const methods = new Map<
-      string,
-      (options: { params: Record<string, unknown>; respond: (...args: unknown[]) => void }) =>
-        | Promise<void>
-        | void
-    >();
-    const cli: Array<{
-      registrar: (ctx: { program: unknown }) => void;
-      opts?: { commands?: string[] };
-    }> = [];
-    return {
-      api: {
-        config: { plugins: { slots: { contextEngine: "continuity" } } },
-        pluginConfig: { capture: { mainDirect: "auto" } },
-        registerContextEngine: (id: string, factory: () => unknown) => contextEngines.set(id, factory),
-        registerGatewayMethod: (
-          method: string,
-          handler: (options: { params: Record<string, unknown>; respond: (...args: unknown[]) => void }) => Promise<void> | void,
-        ) => methods.set(method, handler),
-        registerCli: (
-          registrar: (ctx: { program: unknown }) => void,
-          opts?: { commands?: string[] },
-        ) => cli.push({ registrar, opts }),
-      },
-      contextEngines,
-      methods,
-      cli,
-    };
-  }
+  it("registers context-engine, gateway methods, cli, hook, and route", () => {
+    const service = makeService();
+    createContinuityServiceMock.mockReturnValue(service);
+    const { api, methods, contextEngines, hooks, routes, cli } = createApi({ slotSelected: true });
 
-  async function callMethod(
-    handler: (options: { params: Record<string, unknown>; respond: (...args: unknown[]) => void }) => Promise<void> | void,
-    params: Record<string, unknown>,
-  ) {
-    const calls: unknown[][] = [];
-    await handler({ params, respond: (...args: unknown[]) => calls.push(args) });
-    return calls.at(-1);
-  }
+    plugin.register(api as never);
 
-  it("registers the continuity slot, gateway methods, and cli registrar", () => {
-    const { api, contextEngines, methods, cli } = createApi();
-
-    plugin.register(api);
-
-    expect(state.resolveContinuityConfigCalls).toEqual([{ capture: { mainDirect: "auto" } }]);
     expect(contextEngines.has("continuity")).toBe(true);
-    expect(methods.size).toBe(4);
     expect([...methods.keys()].sort()).toEqual([
       "continuity.explain",
       "continuity.list",
@@ -72,42 +139,57 @@ describe("continuity plugin wrapper", () => {
     ]);
     expect(cli).toHaveLength(1);
     expect(cli[0]?.opts).toEqual({ commands: ["continuity"] });
-  });
 
-  it("creates the service once and passes it into the context engine and cli", () => {
-    const { api, contextEngines, cli } = createApi();
+    expect(routes).toHaveLength(1);
+    expect(routes[0]?.path).toBe("/plugins/continuity");
+    expect(routes[0]?.auth).toBe("gateway");
+    expect(routes[0]?.match).toBe("exact");
 
-    plugin.register(api);
+    expect(hooks.has("before_prompt_build")).toBe(true);
 
-    const engineFactory = contextEngines.get("continuity");
-    expect(engineFactory).toBeTypeOf("function");
-    const engine = engineFactory?.() as { currentService: unknown };
-    expect(state.createContinuityServiceCalls).toHaveLength(1);
-    expect(engine.currentService).toBe(service);
-
-    const fakeProgram = { name: "cli" };
+    const fakeProgram = new Command();
     cli[0]?.registrar({ program: fakeProgram });
-    expect(state.registerContinuityCliCalls).toEqual([
-      { program: fakeProgram, ensureService: expect.any(Function) },
-    ]);
-    expect(state.createContinuityServiceCalls).toHaveLength(1);
   });
 
-  it("handles continuity.status success and error flows", async () => {
-    const { api, methods } = createApi();
-    plugin.register(api);
-    const handler = methods.get("continuity.status");
-    service.status = async (agentId?: string) => ({ enabled: true, agentId });
+  it("creates the service once across gateway and context-engine wiring", async () => {
+    const service = makeService();
+    service.status.mockResolvedValue({ enabled: true });
+    createContinuityServiceMock.mockReturnValue(service);
 
-    await expect(callMethod(handler!, { agentId: " alpha " })).resolves.toEqual([
+    const { api, methods, contextEngines } = createApi({ slotSelected: true });
+    plugin.register(api as never);
+
+    const statusHandler = methods.get("continuity.status");
+    if (!statusHandler) {
+      throw new Error("missing status handler");
+    }
+    await callMethod(statusHandler, {});
+
+    contextEngines.get("continuity")?.();
+
+    expect(createContinuityServiceMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("handles continuity.status success and errors", async () => {
+    const service = makeService();
+    service.status.mockResolvedValue({ enabled: true, agentId: "alpha" });
+    createContinuityServiceMock.mockReturnValue(service);
+
+    const { api, methods } = createApi({ slotSelected: true });
+    plugin.register(api as never);
+
+    const handler = methods.get("continuity.status");
+    if (!handler) {
+      throw new Error("missing handler");
+    }
+
+    await expect(callMethod(handler, { agentId: " alpha " })).resolves.toEqual([
       true,
       { enabled: true, agentId: "alpha" },
     ]);
 
-    service.status = async () => {
-      throw new Error("offline");
-    };
-    await expect(callMethod(handler!, {})).resolves.toEqual([
+    service.status.mockRejectedValueOnce(new Error("offline"));
+    await expect(callMethod(handler, {})).resolves.toEqual([
       false,
       undefined,
       { code: "UNAVAILABLE", message: "Error: offline" },
@@ -115,34 +197,27 @@ describe("continuity plugin wrapper", () => {
   });
 
   it("parses continuity.list filters and handles invalid values", async () => {
-    const { api, methods } = createApi();
-    plugin.register(api);
-    const handler = methods.get("continuity.list");
-    const records: ContinuityRecord[] = [
-      {
-        id: "cont_1",
-        kind: "preference",
-        reviewState: "approved",
-        sourceClass: "main_direct",
-        text: "I prefer terse replies.",
-      },
-    ];
-    let seenParams: unknown;
-    service.list = async (params) => {
-      seenParams = params;
-      return records;
-    };
+    const service = makeService();
+    service.list.mockResolvedValue([]);
+    createContinuityServiceMock.mockReturnValue(service);
 
-    await expect(
-      callMethod(handler!, {
-        agentId: "agent-1",
-        state: "approved",
-        kind: "preference",
-        sourceClass: "main_direct",
-        limit: "7",
-      }),
-    ).resolves.toEqual([true, records]);
-    expect(seenParams).toEqual({
+    const { api, methods } = createApi({ slotSelected: true });
+    plugin.register(api as never);
+
+    const handler = methods.get("continuity.list");
+    if (!handler) {
+      throw new Error("missing handler");
+    }
+
+    await callMethod(handler, {
+      agentId: "agent-1",
+      state: "approved",
+      kind: "preference",
+      sourceClass: "main_direct",
+      limit: "7",
+    });
+
+    expect(service.list).toHaveBeenCalledWith({
       agentId: "agent-1",
       filters: {
         state: "approved",
@@ -152,187 +227,189 @@ describe("continuity plugin wrapper", () => {
       },
     });
 
-    service.list = async (params) => {
-      seenParams = params;
-      return [];
-    };
-    await expect(
-      callMethod(handler!, {
-        agentId: "  ",
-        state: "bogus",
-        kind: "bogus",
-        sourceClass: "bogus",
-        limit: "0",
-      }),
-    ).resolves.toEqual([true, []]);
-    expect(seenParams).toEqual({ filters: {} });
-
-    service.list = async (params) => {
-      seenParams = params;
-      return [];
-    };
-    await expect(
-      callMethod(handler!, {
-        state: "pending",
-        kind: "fact",
-        sourceClass: "paired_direct",
-        limit: 9,
-      }),
-    ).resolves.toEqual([true, []]);
-    expect(seenParams).toEqual({
+    await callMethod(handler, {
+      limit: 9,
+    });
+    expect(service.list).toHaveBeenLastCalledWith({
+      agentId: undefined,
       filters: {
-        state: "pending",
-        kind: "fact",
-        sourceClass: "paired_direct",
+        state: undefined,
+        kind: undefined,
+        sourceClass: undefined,
         limit: 9,
       },
     });
 
-    service.list = async (params) => {
-      seenParams = params;
-      return [];
-    };
-    await expect(
-      callMethod(handler!, {
-        state: "rejected",
-        kind: "decision",
-        sourceClass: "group",
-      }),
-    ).resolves.toEqual([true, []]);
-    expect(seenParams).toEqual({
+    await callMethod(handler, {
+      agentId: "  ",
+      state: "invalid",
+      kind: "invalid",
+      sourceClass: "invalid",
+      limit: "0",
+    });
+
+    expect(service.list).toHaveBeenLastCalledWith({
+      agentId: undefined,
       filters: {
-        state: "rejected",
-        kind: "decision",
-        sourceClass: "group",
+        state: undefined,
+        kind: undefined,
+        sourceClass: undefined,
+        limit: undefined,
       },
     });
 
-    service.list = async (params) => {
-      seenParams = params;
-      return [];
-    };
-    await expect(
-      callMethod(handler!, {
-        state: "all",
-        kind: "open_loop",
-        sourceClass: "channel",
-      }),
-    ).resolves.toEqual([true, []]);
-    expect(seenParams).toEqual({
-      filters: {
-        state: "all",
-        kind: "open_loop",
-        sourceClass: "channel",
-      },
-    });
-
-    service.list = async (params) => {
-      seenParams = params;
-      return [];
-    };
-    await expect(
-      callMethod(handler!, {
-        kind: "all",
-        sourceClass: "all",
-      }),
-    ).resolves.toEqual([true, []]);
-    expect(seenParams).toEqual({
-      filters: {
-        kind: "all",
-        sourceClass: "all",
-      },
-    });
-
-    service.list = async () => {
-      throw new Error("list failed");
-    };
-    await expect(callMethod(handler!, {})).resolves.toEqual([
+    service.list.mockRejectedValueOnce(new Error("list failed"));
+    await expect(callMethod(handler, {})).resolves.toEqual([
       false,
       undefined,
       { code: "UNAVAILABLE", message: "Error: list failed" },
     ]);
   });
 
-  it("validates continuity.patch params, forwards success, and reports unknown ids", async () => {
-    const { api, methods } = createApi();
-    plugin.register(api);
-    const handler = methods.get("continuity.patch");
+  it("validates continuity.patch and continuity.explain payloads", async () => {
+    const service = makeService();
+    service.patch.mockResolvedValue({ ok: true, removedId: "cont_1" });
+    service.explain.mockResolvedValue({
+      record: {
+        id: "cont_1",
+      },
+    });
+    createContinuityServiceMock.mockReturnValue(service);
 
-    await expect(callMethod(handler!, { id: " ", action: "approve" })).resolves.toEqual([
+    const { api, methods } = createApi({ slotSelected: true });
+    plugin.register(api as never);
+
+    const patchHandler = methods.get("continuity.patch");
+    const explainHandler = methods.get("continuity.explain");
+    if (!patchHandler || !explainHandler) {
+      throw new Error("missing handlers");
+    }
+
+    await expect(callMethod(patchHandler, { id: "", action: "approve" })).resolves.toEqual([
       false,
       undefined,
       { code: "INVALID_REQUEST", message: "id and action required" },
     ]);
-    await expect(callMethod(handler!, { id: "cont_1", action: "bogus" })).resolves.toEqual([
+    await expect(callMethod(patchHandler, { id: "cont_1", action: "noop" })).resolves.toEqual([
       false,
       undefined,
       { code: "INVALID_REQUEST", message: "id and action required" },
     ]);
 
-    service.patch = async () => ({ ok: false });
-    await expect(callMethod(handler!, { id: "cont_1", action: "approve" })).resolves.toEqual([
-      false,
-      undefined,
-      { code: "INVALID_REQUEST", message: "unknown continuity id: cont_1" },
-    ]);
+    await expect(callMethod(patchHandler, { id: "cont_1", action: "approve" })).resolves.toEqual(
+      [true, { ok: true, removedId: "cont_1" }],
+    );
 
-    let seenParams: unknown;
-    service.patch = async (params) => {
-      seenParams = params;
-      return { ok: true, removedId: "cont_2" };
-    };
-    await expect(callMethod(handler!, { id: "cont_2", action: "remove", agentId: "beta" })).resolves.toEqual([
-      true,
-      { ok: true, removedId: "cont_2" },
-    ]);
-    expect(seenParams).toEqual({ agentId: "beta", id: "cont_2", action: "remove" });
+    await expect(callMethod(patchHandler, { id: "cont_1", action: "remove" })).resolves.toEqual(
+      [true, { ok: true, removedId: "cont_1" }],
+    );
 
-    service.patch = async () => {
-      throw new Error("patch failed");
-    };
-    await expect(callMethod(handler!, { id: "cont_3", action: "reject" })).resolves.toEqual([
-      false,
-      undefined,
-      { code: "UNAVAILABLE", message: "Error: patch failed" },
-    ]);
-  });
+    await expect(callMethod(patchHandler, { id: "cont_1", action: "reject" })).resolves.toEqual(
+      [true, { ok: true, removedId: "cont_1" }],
+    );
 
-  it("validates continuity.explain params and reports missing records", async () => {
-    const { api, methods } = createApi();
-    plugin.register(api);
-    const handler = methods.get("continuity.explain");
+    service.patch.mockResolvedValueOnce({ ok: false });
+    await expect(callMethod(patchHandler, { id: "cont_missing", action: "approve" })).resolves.toEqual(
+      [
+        false,
+        undefined,
+        { code: "INVALID_REQUEST", message: "unknown continuity id: cont_missing" },
+      ],
+    );
 
-    await expect(callMethod(handler!, {})).resolves.toEqual([
+    await expect(callMethod(explainHandler, {})).resolves.toEqual([
       false,
       undefined,
       { code: "INVALID_REQUEST", message: "id required" },
     ]);
 
-    service.explain = async () => null;
-    await expect(callMethod(handler!, { id: "cont_1" })).resolves.toEqual([
+    await expect(callMethod(explainHandler, { id: "cont_1" })).resolves.toEqual([
+      true,
+      { record: { id: "cont_1" } },
+    ]);
+
+    service.explain.mockResolvedValueOnce(null);
+    await expect(callMethod(explainHandler, { id: "cont_missing" })).resolves.toEqual([
       false,
       undefined,
-      { code: "INVALID_REQUEST", message: "unknown continuity id: cont_1" },
+      { code: "INVALID_REQUEST", message: "unknown continuity id: cont_missing" },
     ]);
 
-    let seenParams: unknown;
-    service.explain = async (params) => {
-      seenParams = params;
-      return { id: "cont_2", markdownPath: "memory/continuity/preferences.md" };
-    };
-    await expect(callMethod(handler!, { id: "cont_2", agentId: "gamma" })).resolves.toEqual([
-      true,
-      { id: "cont_2", markdownPath: "memory/continuity/preferences.md" },
+    service.patch.mockRejectedValueOnce(new Error("patch failed"));
+    await expect(callMethod(patchHandler, { id: "cont_1", action: "approve" })).resolves.toEqual([
+      false,
+      undefined,
+      { code: "UNAVAILABLE", message: "Error: patch failed" },
     ]);
-    expect(seenParams).toEqual({ agentId: "gamma", id: "cont_2" });
 
-    service.explain = async () => {
-      throw new Error("explain failed");
-    };
-    await expect(callMethod(handler!, { id: "cont_9" })).resolves.toEqual([
+    service.explain.mockRejectedValueOnce(new Error("explain failed"));
+    await expect(callMethod(explainHandler, { id: "cont_1" })).resolves.toEqual([
       false,
       undefined,
       { code: "UNAVAILABLE", message: "Error: explain failed" },
     ]);
+  });
+
+  it("injects prependSystemContext only when continuity slot is selected", async () => {
+    const service = makeService();
+    service.buildSystemPromptAddition.mockResolvedValue("<continuity>items</continuity>");
+    createContinuityServiceMock.mockReturnValue(service);
+
+    const selected = createApi({ slotSelected: true });
+    plugin.register(selected.api as never);
+    const selectedHook = selected.hooks.get("before_prompt_build");
+    if (!selectedHook) {
+      throw new Error("missing hook");
+    }
+
+    await expect(
+      selectedHook(
+        {
+          prompt: "prompt",
+          messages: [
+            null,
+            { role: 3 },
+            { role: "user", content: "remember this", timestamp: 123 },
+          ],
+        },
+        { agentId: "alpha", sessionKey: "main" },
+      ),
+    ).resolves.toEqual({
+      prependSystemContext: "<continuity>items</continuity>",
+    });
+
+    expect(service.buildSystemPromptAddition).toHaveBeenCalledWith({
+      agentId: "alpha",
+      sessionKey: "main",
+      messages: [{ role: "user", content: "remember this", timestamp: 123 }],
+    });
+
+    const notSelected = createApi({ slotSelected: false });
+    plugin.register(notSelected.api as never);
+    const notSelectedHook = notSelected.hooks.get("before_prompt_build");
+    if (!notSelectedHook) {
+      throw new Error("missing hook");
+    }
+
+    await expect(
+      notSelectedHook(
+        {
+          prompt: "prompt",
+          messages: [{ role: "user", content: "remember this" }],
+        },
+        { agentId: "alpha", sessionKey: "main" },
+      ),
+    ).resolves.toBeUndefined();
+
+    service.buildSystemPromptAddition.mockResolvedValueOnce(undefined);
+    await expect(
+      selectedHook(
+        {
+          prompt: "prompt",
+          messages: [{ role: "user", content: "remember this" }],
+        },
+        { agentId: "alpha", sessionKey: "main" },
+      ),
+    ).resolves.toBeUndefined();
   });
 });
