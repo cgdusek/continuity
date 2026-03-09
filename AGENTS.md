@@ -4,12 +4,12 @@ This file is the operational guide for humans and coding agents working in this 
 
 ## Mission
 
-Maintain a thin, stable external wrapper around OpenClaw's continuity SDK module (`openclaw/plugin-sdk/continuity`).
+Maintain the Continuity OpenClaw plugin implementation in this repository, including capture/review/recall behavior, plugin interfaces, and packaging guarantees.
 
 ## Ground Rules
 
-- Keep wrapper behavior aligned with the upstream SDK API.
-- Prefer small, explicit input validation at the gateway boundary.
+- Keep runtime behavior aligned across plugin entrypoint, continuity service modules, tests, and docs.
+- Preserve explicit input validation at gateway and route boundaries.
 - Preserve packaging guarantees: built output in `dist/`, plugin metadata in `openclaw.plugin.json`.
 - Do not add runtime dependencies unless required.
 
@@ -21,9 +21,9 @@ Maintain a thin, stable external wrapper around OpenClaw's continuity SDK module
 
 ## Repository Map
 
-- Runtime wrapper: `src/index.ts`
-- Unit tests: `src/index.test.ts`
-- SDK test mock: `test/mocks/openclaw-plugin-sdk-continuity.ts`
+- Plugin entrypoint and registration wiring: `src/index.ts`
+- Core continuity implementation: `src/continuity/*.ts`
+- Unit tests: `src/index.test.ts`, `src/continuity/*.test.ts`
 - Plugin manifest + config schema: `openclaw.plugin.json`
 - Build/test toolchain: `package.json`, `tsconfig.json`, `vitest.config.ts`
 - CI workflow: `.github/workflows/ci.yml`

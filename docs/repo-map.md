@@ -8,15 +8,32 @@
 - `README.md`: package overview, local workflows, CI summary, and docs links
 - `AGENTS.md`: agent/human contribution contract
 
-## Source
+## Source Entrypoints
 
-- `src/index.ts`: runtime wrapper (registration + gateway validation/normalization)
-- `src/openclaw-plugin-sdk-continuity.d.ts`: ambient SDK typings for compilation
-- `src/index.test.ts`: wrapper unit tests for registration and gateway behavior
+- `src/index.ts`: plugin registration, gateway handlers, CLI + route registration, prompt hook
+- `src/openclaw-plugin-sdk.d.ts`: ambient OpenClaw SDK typings used for compilation
+- `src/index.test.ts`: plugin entrypoint integration-style unit coverage
+
+## Continuity Modules (`src/continuity`)
+
+- `assistant-visible-text.ts`: strips assistant internal tag/scaffolding blocks
+- `chat-content.ts`: extracts text from OpenClaw chat content payloads
+- `cli.ts`: `continuity` CLI command registration
+- `config.ts`: continuity config defaults + normalization
+- `engine.ts`: context-engine adapter (`afterTurn` capture + compact delegation)
+- `errors.ts`: shared gateway error code helpers
+- `extractor.ts`: heuristic continuity extraction + prompt-injection filtering
+- `index.ts`: continuity module exports
+- `json-files.ts`: atomic JSON/text write helpers + async lock
+- `route.ts`: `/plugins/continuity` dashboard GET/POST handler
+- `scope.ts`: source class and recall scope policy checks
+- `service.ts`: continuity store, review, materialization, and recall assembly
+- `session-key.ts`: agent/session parsing + workspace resolution
+- `types.ts`: continuity type surface
 
 ## Tests And Tooling
 
-- `test/mocks/openclaw-plugin-sdk-continuity.ts`: SDK mock used by unit tests via Vitest alias
+- `src/continuity/*.test.ts`: unit coverage for continuity modules
 - `vitest.config.ts`: test config and 100% coverage thresholds
 - `tsconfig.json`: TypeScript NodeNext build config (`dist/` output)
 

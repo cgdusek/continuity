@@ -28,6 +28,11 @@ pnpm test:coverage
 pnpm test:e2e
 ```
 
+Notes:
+
+- `test:unit` runs `vitest run` for `src/**/*.test.ts`.
+- `test:coverage` uses V8 coverage and enforces 100% thresholds for `src/index.ts` (per `vitest.config.ts`).
+
 Clean artifacts:
 
 ```bash
@@ -61,7 +66,7 @@ pnpm clean
 
 ### Manual Trigger
 
-`workflow_dispatch` input:
+`workflow_dispatch` input (required):
 
 - `level: smoke | full | both` (default: `full`)
 

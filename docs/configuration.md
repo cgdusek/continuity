@@ -1,6 +1,9 @@
 # Configuration
 
-Configuration schema is defined in `openclaw.plugin.json` under `configSchema`.
+Configuration schema is declared in `openclaw.plugin.json` under `configSchema`.
+Runtime normalization is implemented in `src/continuity/config.ts` (`resolveContinuityConfig`).
+
+Plugin config is read from `plugins.entries.continuity.config`.
 
 Top-level schema is an object with `additionalProperties: false`.
 
@@ -25,6 +28,32 @@ Top-level schema is an object with `additionalProperties: false`.
 - `includeOpenLoops`: boolean (default: `true`)
 - `scope`: object (`additionalProperties: true`)
 - object has `additionalProperties: false`
+
+## Runtime Normalization Rules
+
+`resolveContinuityConfig(raw)` applies these behaviors:
+
+- invalid or missing sections fall back to defaults
+- capture modes accept only `off|review|auto`
+- `capture.minConfidence`:
+  - accepts `0`
+  - falls back when invalid/negative
+  - clamps to `<= 1`
+- `recall.maxItems`:
+  - falls back when invalid/non-positive
+  - truncates decimals
+  - minimum `1`, maximum `12`
+- `recall.scope`:
+  - deep-cloned from input
+  - default policy when missing:
+    - `default: "deny"`
+    - `rules: [{ action: "allow", match: { chatType: "direct" } }]`
+  - invalid/missing `scope.default` falls back to `"deny"`
+
+## Notes On `review.requireSource`
+
+- This flag is preserved in config and returned by `continuity.status`.
+- Current runtime capture records already include `source.excerpt`, so this flag does not add extra gating logic in `service.patch` today.
 
 ## UI Hints
 
