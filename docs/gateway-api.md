@@ -5,8 +5,8 @@ All methods are registered inside `src/index.ts`.
 ## `continuity.status`
 
 - Optional params: `agentId` (string)
-- Behavior: returns `service.status(agentId?)`
 - Validation: trims `agentId`; empty string is ignored
+- Behavior: calls `service.status(agentId?)` and returns result verbatim
 
 ## `continuity.list`
 
@@ -16,7 +16,11 @@ All methods are registered inside `src/index.ts`.
   - `kind`: `fact | preference | decision | open_loop | all`
   - `sourceClass`: `main_direct | paired_direct | group | channel | all`
   - `limit`: positive integer (number or numeric string)
-- Behavior: builds `filters` object with only valid values and calls `service.list(...)`
+- Validation:
+  - unknown enum values are ignored
+  - non-positive or non-numeric `limit` is ignored
+  - empty/whitespace `agentId` is ignored
+- Behavior: calls `service.list({ filters, agentId? })` where `filters` is always present (possibly empty)
 
 ## `continuity.patch`
 
@@ -27,7 +31,7 @@ All methods are registered inside `src/index.ts`.
 - Behavior:
   - invalid/missing `id` or `action` -> invalid request error
   - when service returns `{ ok: false }` -> invalid request error (`unknown continuity id`)
-  - otherwise returns service result
+  - otherwise returns service result (`ok: true`, with SDK-provided payload)
 
 ## `continuity.explain`
 
@@ -44,4 +48,4 @@ Any thrown exception in method handlers returns:
 
 - `ok: false`
 - `error.code: UNAVAILABLE`
-- `error.message: String(error)`
+- `error.message: String(error)` (for example, `Error: offline`)
