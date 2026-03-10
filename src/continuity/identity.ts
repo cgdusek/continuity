@@ -83,7 +83,7 @@ export function resolveContinuityScope(params: {
     };
   }
 
-  const rawKey = params.sessionKey?.trim().toLowerCase() ?? "";
+  const rawKey = params.sessionKey!.trim().toLowerCase();
   const boundSubjectId = resolveBoundSubjectId({
     identity: params.identity,
     rawKey,

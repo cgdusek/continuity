@@ -227,4 +227,49 @@ describe("resolveContinuityConfig", () => {
       ttlHours: 168,
     });
   });
+
+  it("falls back for too-small recent integers and drops invalid bindings", () => {
+    const resolved = resolveContinuityConfig({
+      identity: {
+        bindings: [
+          undefined,
+          "bad-binding" as unknown as never,
+          {
+            subjectId: " ",
+          },
+          {
+            subjectId: "Owner",
+            matches: [
+              undefined,
+              "bad-match" as unknown as never,
+              {} as never,
+              { channel: "Discord" },
+            ],
+          },
+        ],
+      },
+      recent: {
+        maxExcerpts: 0,
+        maxChars: 100,
+        ttlHours: 0,
+      },
+    });
+
+    expect(resolved.identity.bindings).toEqual([
+      {
+        subjectId: "owner",
+        matches: [],
+      },
+      {
+        subjectId: "owner",
+        matches: [{ channel: "discord" }],
+      },
+    ]);
+    expect(resolved.recent).toEqual({
+      enabled: false,
+      maxExcerpts: 6,
+      maxChars: 1200,
+      ttlHours: 24,
+    });
+  });
 });

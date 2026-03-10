@@ -427,10 +427,9 @@ function getLegacyScopeFallback(params: {
   };
 }
 
-function normalizeRecentMessageText(message: ContinuityAgentMessage): string | undefined {
-  if (message.role !== "user" && message.role !== "assistant") {
-    return undefined;
-  }
+function normalizeRecentMessageText(
+  message: ContinuityAgentMessage & { role: "user" | "assistant" },
+): string | undefined {
   const text = extractTextFromChatContent(message.content ?? "", {
     sanitizeText: (value) =>
       message.role === "assistant"
@@ -441,9 +440,6 @@ function normalizeRecentMessageText(message: ContinuityAgentMessage): string | u
     return undefined;
   }
   const normalized = normalizeText(text);
-  if (!normalized) {
-    return undefined;
-  }
   if (isPromptInjectionShaped(normalized)) {
     return undefined;
   }
@@ -815,7 +811,9 @@ export class ContinuityService {
           if (message.role !== "user" && message.role !== "assistant") {
             continue;
           }
-          const text = normalizeRecentMessageText(message);
+          const text = normalizeRecentMessageText(
+            message as ContinuityAgentMessage & { role: "user" | "assistant" },
+          );
           if (!text || !scope.subjectId) {
             continue;
           }
@@ -1031,10 +1029,10 @@ export class ContinuityService {
         pendingCount: aggregate.pendingCount,
         rejectedCount: aggregate.rejectedCount,
         recentCount: aggregate.recentCount,
-        lastSeenAt: aggregate.lastSeenAt,
+        lastSeenAt: aggregate.lastSeenAt!,
         sessionKeys: [...aggregate.sessionKeys].sort(),
       }))
-      .toSorted((a, b) => (b.lastSeenAt ?? 0) - (a.lastSeenAt ?? 0) || a.subjectId.localeCompare(b.subjectId))
+      .toSorted((a, b) => b.lastSeenAt - a.lastSeenAt || a.subjectId.localeCompare(b.subjectId))
       .slice(0, params?.limit && params.limit > 0 ? params.limit : undefined);
   }
 

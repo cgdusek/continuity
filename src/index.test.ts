@@ -251,6 +251,21 @@ describe("continuity plugin", () => {
     });
 
     await callMethod(handler, {
+      scopeKind: "all",
+    });
+    expect(service.list).toHaveBeenLastCalledWith({
+      agentId: undefined,
+      filters: {
+        state: undefined,
+        kind: undefined,
+        sourceClass: undefined,
+        scopeKind: "all",
+        subjectId: undefined,
+        limit: undefined,
+      },
+    });
+
+    await callMethod(handler, {
       agentId: "  ",
       state: "invalid",
       kind: "invalid",
@@ -316,6 +331,33 @@ describe("continuity plugin", () => {
       sessionKey: "discord:direct:owner",
       limit: 3,
     });
+  });
+
+  it("handles continuity.subjects and continuity.recent errors", async () => {
+    const service = makeService();
+    service.subjects.mockRejectedValueOnce(new Error("subjects failed"));
+    service.recent.mockRejectedValueOnce(new Error("recent failed"));
+    createContinuityServiceMock.mockReturnValue(service);
+
+    const { api, methods } = createApi({ slotSelected: true });
+    plugin.register(api as never);
+
+    const subjectsHandler = methods.get("continuity.subjects");
+    const recentHandler = methods.get("continuity.recent");
+    if (!subjectsHandler || !recentHandler) {
+      throw new Error("missing handlers");
+    }
+
+    await expect(callMethod(subjectsHandler, {})).resolves.toEqual([
+      false,
+      undefined,
+      { code: "UNAVAILABLE", message: "Error: subjects failed" },
+    ]);
+    await expect(callMethod(recentHandler, {})).resolves.toEqual([
+      false,
+      undefined,
+      { code: "UNAVAILABLE", message: "Error: recent failed" },
+    ]);
   });
 
   it("validates continuity.patch and continuity.explain payloads", async () => {

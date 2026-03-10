@@ -176,6 +176,32 @@ describe("registerContinuityCli", () => {
     expect(logSpy).toHaveBeenCalledWith(JSON.stringify([{ id: "recent_1" }], null, 2));
   });
 
+  it("falls back to the default limit for subjects and recent when parsing fails", async () => {
+    const service = {
+      subjects: vi.fn().mockResolvedValue([]),
+      recent: vi.fn().mockResolvedValue([]),
+    };
+    const program = makeProgram(service);
+
+    await program.parseAsync(["continuity", "subjects", "--limit", "NaN", "--json"], {
+      from: "user",
+    });
+    await program.parseAsync(["continuity", "recent", "--limit", "NaN", "--json"], {
+      from: "user",
+    });
+
+    expect(service.subjects).toHaveBeenCalledWith({
+      agentId: undefined,
+      limit: 50,
+    });
+    expect(service.recent).toHaveBeenCalledWith({
+      agentId: undefined,
+      subjectId: undefined,
+      sessionKey: undefined,
+      limit: 50,
+    });
+  });
+
   it.each([
     ["approve", "approve"],
     ["reject", "reject"],
