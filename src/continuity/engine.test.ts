@@ -1,3 +1,4 @@
+import fs from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -248,6 +249,59 @@ describe("ContinuityContextEngine", () => {
     });
 
     expect(logger.warn).toHaveBeenCalledTimes(1);
+  });
+
+  it("resolves the compact delegate from an installed openclaw package when present", async () => {
+    const service = makeService();
+    const packageRoot = path.join(process.cwd(), "node_modules", "openclaw");
+    const packageJsonPath = path.join(packageRoot, "package.json");
+    const runtimePath = path.join(
+      packageRoot,
+      "dist",
+      "agents",
+      "pi-embedded-runner",
+      "compact.runtime.js",
+    );
+
+    await fs.mkdir(path.dirname(runtimePath), { recursive: true });
+    await fs.writeFile(packageJsonPath, '{\n  "name": "openclaw",\n  "type": "module"\n}\n', "utf8");
+    await fs.writeFile(
+      runtimePath,
+      [
+        "export async function compactEmbeddedPiSessionDirect(params) {",
+        '  return { ok: true, compacted: true, reason: "resolved", result: { tokensBefore: 10, tokensAfter: 4, details: { sessionKey: params.sessionKey } } };',
+        "}",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+
+    try {
+      const engine = new ContinuityContextEngine({ service });
+
+      await expect(
+        engine.compact({
+          sessionId: "session-resolved",
+          sessionFile: path.join("/tmp", "session.jsonl"),
+          runtimeContext: {
+            sessionKey: "main",
+          },
+        }),
+      ).resolves.toEqual({
+        ok: true,
+        compacted: true,
+        reason: "resolved",
+        result: {
+          summary: undefined,
+          firstKeptEntryId: undefined,
+          tokensBefore: 10,
+          tokensAfter: 4,
+          details: { sessionKey: "main" },
+        },
+      });
+    } finally {
+      await fs.rm(packageRoot, { recursive: true, force: true });
+    }
   });
 
   it("delegates compact to compactEmbeddedPiSessionDirect when available", async () => {

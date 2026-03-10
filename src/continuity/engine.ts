@@ -102,12 +102,10 @@ async function resolveCompactDelegate(logger?: PluginLogger): Promise<CompactDel
   }
   /* v8 ignore stop */
 
-  if (!compactDelegateState.warnedResolutionFailure) {
-    compactDelegateState.warnedResolutionFailure = true;
-    logger?.warn(
-      "continuity compact delegate unavailable; using non-compacting fallback",
-    );
-  }
+  compactDelegateState.warnedResolutionFailure = true;
+  logger?.warn(
+    "continuity compact delegate unavailable; using non-compacting fallback",
+  );
 
   compactDelegateState.delegate = null;
   return null;

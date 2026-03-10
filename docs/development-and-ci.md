@@ -31,7 +31,7 @@ pnpm test:e2e
 Notes:
 
 - `test:unit` runs `vitest run` for `src/**/*.test.ts`.
-- `test:coverage` uses V8 coverage and enforces 100% thresholds for `src/index.ts` (per `vitest.config.ts`).
+- `test:coverage` uses V8 coverage and enforces 100% thresholds for all runtime source files under `src/`, excluding tests, declaration files, the type-only continuity schema types, and the continuity barrel file (per `vitest.config.ts`).
 
 Clean artifacts:
 
@@ -47,6 +47,18 @@ pnpm clean
 - Copies repository content to `${OPENCLAW_PLUGIN_ROOT:-$HOME/.openclaw/extensions}/continuity`
 - Excludes `.git`, `coverage`, `node_modules`, and `.tmp`
 
+## Local Dev Launcher
+
+`bash scripts/run-dev.sh`
+
+- Resolves `openclaw@latest` from npm at runtime
+- Installs or updates a local OpenClaw copy under `.tmp/run-dev/openclaw`
+- Builds the plugin and links this repository into the local OpenClaw install
+- Keeps OpenClaw config, state, and workspace under `.tmp/run-dev/`
+- Starts a loopback-only gateway with `auth none` on port `19001`
+- Prints the local Gateway WS URL, Gateway UI URL, and Continuity plugin UI URL before startup
+- Supports overrides through `CONTINUITY_DEV_ROOT`, `CONTINUITY_OPENCLAW_DIR`, `CONTINUITY_OPENCLAW_STATE_DIR`, `CONTINUITY_OPENCLAW_CONFIG_PATH`, `CONTINUITY_OPENCLAW_WORKSPACE_DIR`, `CONTINUITY_GATEWAY_PORT`, and loopback-only `CONTINUITY_GATEWAY_HOST`
+
 ## E2E Packaging Harness
 
 `bash scripts/test-e2e.sh`
@@ -54,7 +66,8 @@ pnpm clean
 - Packs the npm tarball into `.tmp/e2e/`
 - Extracts it under `.tmp/e2e/unpacked/package`
 - Runs `node scripts/e2e-smoke.mjs <package-dir>`
-- Asserts package load + registration behavior against a simulated host
+- Asserts tarball packaging guarantees (`dist/`, `openclaw.plugin.json`)
+- Asserts package load, registration, CLI wiring, gateway methods, route POST actions, review flow, markdown materialization, and recall behavior against a simulated host
 
 ## CI Workflow (`.github/workflows/ci.yml`)
 
@@ -74,18 +87,21 @@ pnpm clean
 
 - `smoke-build`: install + build + typecheck (Node 22)
 - `smoke-unit`: install + unit tests (Node 22)
-- `smoke-e2e`: install + build + package-load e2e (Node 22)
+- `smoke-e2e`: install + build + packaged integration smoke (Node 22)
 
 ### Full Lanes (automatic + manual `level=full|both`)
 
 - `full-verify` on Node 22 and 24: build + typecheck + unit tests
-- `full-coverage` on Node 22: coverage run + artifact upload
-- `full-e2e` on Node 22: package-load e2e
+- `full-coverage` on Node 22: full-source 100% coverage gate + artifact upload
+- `full-e2e` on Node 22: packaged integration smoke
 
 ### CI Execution Controls
 
-- Concurrency key: `ci-${{ github.workflow }}-${{ github.ref }}`
-- In-progress runs on the same ref are canceled when a new run starts
+- Runner image is pinned to `ubuntu-24.04`
+- Node/pnpm versions are centralized in workflow `env`
+- pnpm cache uses `pnpm-lock.yaml` as the dependency cache key
+- Concurrency key: `ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}`
+- In-progress runs are canceled on the same PR/ref, except scheduled runs
 
 ## Release Notes
 

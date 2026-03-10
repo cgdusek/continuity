@@ -4,6 +4,31 @@ External OpenClaw continuity context-engine plugin package.
 
 This repository contains the plugin implementation for continuity capture, review, persistence, recall, and operator controls.
 
+## Plugin Functionality
+
+- Capture durable continuity candidates from user/assistant turns and classify them as `fact`, `preference`, `decision`, or `open_loop`.
+- Route captured items into `approved` or `pending` review state based on source-class capture mode and review settings.
+- Persist a per-agent continuity store under `<stateDir>/agents/<agentId>/continuity/store.json`.
+- Materialize approved continuity items into workspace markdown files under `memory/continuity/`.
+- Rank and inject approved continuity items into prompt build as untrusted historical context when the Continuity slot is active and recall scope allows it.
+- Expose operator controls through gateway methods, a `continuity` CLI namespace, and the plugin dashboard at `/plugins/continuity`.
+
+## Dashboard UI
+
+The plugin ships a built-in dashboard route:
+
+- `GET/POST /plugins/continuity`
+
+The dashboard provides:
+
+- Continuity slot activation/deactivation
+- Agent-scoped record browsing
+- Capture and recall configuration controls
+- Pending review actions (`approve`, `reject`, `remove`)
+- Approved-item management (`remove`)
+
+Dashboard control details are documented in [docs/dashboard-ui.md](docs/dashboard-ui.md).
+
 ## What This Package Registers
 
 - Plugin metadata (`id: continuity`, `kind: context-engine`) from `dist/index.js`
@@ -58,6 +83,32 @@ openclaw config set plugins.slots.contextEngine continuity
 
 `deploy-dev.sh` builds and copies the repository into `${OPENCLAW_PLUGIN_ROOT:-$HOME/.openclaw/extensions}/continuity` (excluding `.git`, `coverage`, `node_modules`, and `.tmp`).
 
+## Local Dev Gateway
+
+```bash
+bash scripts/run-dev.sh
+```
+
+`run-dev.sh` resolves `openclaw@latest` from npm at runtime, installs or updates a local copy under `.tmp/run-dev/openclaw`, builds this plugin, links the repository into that local OpenClaw instance, and starts a loopback-only gateway with no auth on port `19001`.
+
+The script prints the local endpoints before startup:
+
+- Gateway WS: `ws://127.0.0.1:19001`
+- Gateway UI: `http://127.0.0.1:19001/`
+- Continuity UI: `http://127.0.0.1:19001/plugins/continuity`
+
+The launcher keeps its config, state, and workspace under `.tmp/run-dev/` so it does not reuse the default `~/.openclaw` directories.
+
+Override points are exposed via environment variables:
+
+- `CONTINUITY_DEV_ROOT`
+- `CONTINUITY_OPENCLAW_DIR`
+- `CONTINUITY_OPENCLAW_STATE_DIR`
+- `CONTINUITY_OPENCLAW_CONFIG_PATH`
+- `CONTINUITY_OPENCLAW_WORKSPACE_DIR`
+- `CONTINUITY_GATEWAY_PORT`
+- `CONTINUITY_GATEWAY_HOST` (`127.0.0.1`, `localhost`, or `::1` only)
+
 ## Validation Commands
 
 ```bash
@@ -73,6 +124,8 @@ Optional full local test lane:
 pnpm test:coverage
 ```
 
+`test:coverage` enforces 100% coverage across the runtime source tree under `src/`, excluding tests, declaration files, the type-only continuity schema types, and the continuity barrel file.
+
 ## CI Summary
 
 CI is defined in `.github/workflows/ci.yml`.
@@ -86,11 +139,15 @@ CI is defined in `.github/workflows/ci.yml`.
 - Smoke lanes (manual only for `smoke|both`):
   - build + typecheck (Node 22)
   - unit tests (Node 22)
-  - e2e package-load test (Node 22)
+  - packaged integration smoke (Node 22)
 - Full lanes (automatic + manual `full|both`):
   - verify matrix (Node 22 and 24)
-  - coverage run + artifact upload (Node 22)
-  - e2e package-load test (Node 22)
+  - full-source 100% coverage gate + artifact upload (Node 22)
+  - packaged integration smoke (Node 22)
+- Workflow defaults:
+  - pinned runner image (`ubuntu-24.04`)
+  - centralized Node/pnpm versions
+  - pnpm cache keyed by `pnpm-lock.yaml`
 
 ## Documentation
 
@@ -100,4 +157,5 @@ CI is defined in `.github/workflows/ci.yml`.
 - Gateway API: [docs/gateway-api.md](docs/gateway-api.md)
 - Configuration: [docs/configuration.md](docs/configuration.md)
 - Development and CI: [docs/development-and-ci.md](docs/development-and-ci.md)
+- Dashboard UI: [docs/dashboard-ui.md](docs/dashboard-ui.md)
 - Repository map: [docs/repo-map.md](docs/repo-map.md)

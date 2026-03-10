@@ -55,7 +55,7 @@ function resolveCaptureMode(
 function resolvePositiveNumber(
   value: unknown,
   fallback: number,
-  max?: number,
+  max: number,
   allowZero = false,
 ): number {
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
@@ -64,11 +64,7 @@ function resolvePositiveNumber(
   if (!allowZero && value === 0) {
     return fallback;
   }
-  if (typeof max === "number") {
-    return Math.min(value, max);
-  }
-  /* v8 ignore next */
-  return value;
+  return Math.min(value, max);
 }
 
 function resolveScopeDefault(value: unknown): "allow" | "deny" {
@@ -79,14 +75,10 @@ function cloneScope(scope?: SessionSendPolicyConfig): SessionSendPolicyConfig {
   if (!scope) {
     return {
       default: DEFAULT_SCOPE.default,
-      rules: DEFAULT_SCOPE.rules?.map((rule) =>
-        rule
-          ? {
-              action: rule.action,
-              match: rule.match ? { ...rule.match } : undefined,
-            }
-          : undefined,
-      ),
+      rules: DEFAULT_SCOPE.rules?.map((rule) => ({
+        action: rule!.action,
+        match: { ...rule!.match },
+      })),
     };
   }
   return {

@@ -808,4 +808,70 @@ describe("ContinuityService", () => {
 
     expect(prompt).toContain("Preference: I prefer concise updates.");
   });
+
+  it("falls back to session ids when approved records do not retain a session key", async () => {
+    const service = makeService();
+    await writeStore([
+      {
+        id: "cont_session_only",
+        kind: "fact",
+        text: "Remember this: my timezone is America/Chicago.",
+        normalizedText: "remember this: my timezone is america/chicago.",
+        confidence: 1,
+        sourceClass: "paired_direct",
+        source: {
+          role: "user",
+          sessionId: "session-only",
+          excerpt: "Remember this: my timezone is America/Chicago.",
+        },
+        createdAt: 1,
+        updatedAt: 1,
+        reviewState: "pending",
+      },
+      {
+        id: "cont_unknown_source",
+        kind: "fact",
+        text: "Remember this: deadline is Friday.",
+        normalizedText: "remember this: deadline is friday.",
+        confidence: 1,
+        sourceClass: "paired_direct",
+        source: {
+          role: "user",
+          excerpt: "Remember this: deadline is Friday.",
+        },
+        createdAt: 2,
+        updatedAt: 2,
+        reviewState: "pending",
+      },
+    ]);
+
+    await expect(service.patch({ id: "cont_session_only", action: "approve" })).resolves.toEqual({
+      ok: true,
+      record: expect.objectContaining({
+        id: "cont_session_only",
+        reviewState: "approved",
+      }),
+    });
+    await expect(service.patch({ id: "cont_unknown_source", action: "approve" })).resolves.toEqual({
+      ok: true,
+      record: expect.objectContaining({
+        id: "cont_unknown_source",
+        reviewState: "approved",
+      }),
+    });
+
+    const prompt = await service.buildSystemPromptAddition({
+      sessionKey: "discord:direct:owner",
+      messages: [{ role: "user" }],
+    });
+
+    expect(prompt).toContain("session-only");
+    expect(prompt).toContain("source: unknown");
+    await expect(
+      fs.readFile(path.join(workspaceDir, "memory", "continuity", "facts.md"), "utf8"),
+    ).resolves.toContain("session-only");
+    await expect(
+      fs.readFile(path.join(workspaceDir, "memory", "continuity", "facts.md"), "utf8"),
+    ).resolves.toContain("Source: unknown");
+  });
 });

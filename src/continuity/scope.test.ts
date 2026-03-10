@@ -24,6 +24,20 @@ describe("isContinuityScopeAllowed", () => {
     expect(isContinuityScopeAllowed(undefined, "discord:channel:general")).toBe(true);
   });
 
+  it("falls back to the configured default when rules or session keys are missing", () => {
+    expect(isContinuityScopeAllowed({ default: "deny" }, undefined)).toBe(false);
+    expect(isContinuityScopeAllowed({ rules: [] }, "discord:channel:general")).toBe(true);
+    expect(
+      isContinuityScopeAllowed(
+        {
+          default: "allow",
+          rules: [{ action: "deny" }],
+        },
+        "discord:direct:owner",
+      ),
+    ).toBe(false);
+  });
+
   it("matches normalized key prefixes against agent-scoped direct sessions", () => {
     const scope = {
       default: "deny",

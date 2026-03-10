@@ -503,7 +503,7 @@ export function createContinuityRouteHandler(params: ContinuityRouteParams) {
     }
 
     try {
-      const requestUrl = new URL(req.url ?? CONTINUITY_ROUTE_PATH, "http://localhost");
+      const requestUrl = new URL(req.url!, "http://localhost");
       const agentId = requestUrl.searchParams.get("agent")?.trim() || undefined;
       const status = await params.service.status(agentId);
       const pending = await params.service.list({
