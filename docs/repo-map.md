@@ -8,6 +8,15 @@
 - `README.md`: package overview, local workflows, CI summary, and docs links
 - `AGENTS.md`: agent/human contribution contract
 
+## Documentation
+
+- `docs/README.md`: docs index and update contract
+- `docs/architecture.md`: runtime lifecycle, capture/review/recall pipeline, and route registration
+- `docs/configuration.md`: plugin config schema, defaults, and normalization rules
+- `docs/dashboard-ui.md`: Continuity dashboard route, control meanings, and review actions
+- `docs/development-and-ci.md`: local commands, helper scripts, and CI workflow
+- `docs/gateway-api.md`: gateway method contracts and error behavior
+
 ## Source Entrypoints
 
 - `src/index.ts`: plugin registration, gateway handlers, CLI + route registration, prompt hook
@@ -40,6 +49,7 @@
 ## Scripts
 
 - `scripts/deploy-dev.sh`: build + copy package into local OpenClaw extension directory
+- `scripts/run-dev.sh`: build Continuity, link it into a local `openclaw@latest` install, and run a loopback dev gateway with printed UI links
 - `scripts/test-e2e.sh`: pack tarball, unpack, and execute packaged integration smoke harness
 - `scripts/e2e-smoke.mjs`: simulated host load that validates packaging, registration, CLI, gateway, route review/config actions, materialization, and recall for packaged output
 

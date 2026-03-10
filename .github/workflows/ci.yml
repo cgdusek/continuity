@@ -21,12 +21,6 @@ on:
           - full
           - both
 
-env:
-  CI_RUNNER: ubuntu-24.04
-  NODE_VERSION_PRIMARY: "22"
-  NODE_VERSION_MATRIX: '["22","24"]'
-  PNPM_VERSION: "10.23.0"
-
 defaults:
   run:
     shell: bash
@@ -35,28 +29,28 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name != 'schedule' }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   smoke-build:
     if: >-
       github.event_name == 'workflow_dispatch' &&
-      (inputs.level == 'smoke' || inputs.level == 'both')
+      (github.event.inputs.level == 'smoke' || github.event.inputs.level == 'both')
     name: smoke / build + typecheck
-    runs-on: ${{ env.CI_RUNNER }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: ${{ env.PNPM_VERSION }}
+          version: 10.23.0
           run_install: false
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION_PRIMARY }}
+          node-version: 22
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - name: Install dependencies
@@ -69,21 +63,21 @@ jobs:
   smoke-unit:
     if: >-
       github.event_name == 'workflow_dispatch' &&
-      (inputs.level == 'smoke' || inputs.level == 'both')
+      (github.event.inputs.level == 'smoke' || github.event.inputs.level == 'both')
     name: smoke / unit
-    runs-on: ${{ env.CI_RUNNER }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: ${{ env.PNPM_VERSION }}
+          version: 10.23.0
           run_install: false
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION_PRIMARY }}
+          node-version: 22
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - name: Install dependencies
@@ -94,21 +88,21 @@ jobs:
   smoke-e2e:
     if: >-
       github.event_name == 'workflow_dispatch' &&
-      (inputs.level == 'smoke' || inputs.level == 'both')
+      (github.event.inputs.level == 'smoke' || github.event.inputs.level == 'both')
     name: smoke / packaged integration smoke
-    runs-on: ${{ env.CI_RUNNER }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: ${{ env.PNPM_VERSION }}
+          version: 10.23.0
           run_install: false
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION_PRIMARY }}
+          node-version: 22
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - name: Install dependencies
@@ -123,20 +117,22 @@ jobs:
       github.event_name == 'pull_request' ||
       github.event_name == 'push' ||
       github.event_name == 'schedule' ||
-      (github.event_name == 'workflow_dispatch' && (inputs.level == 'full' || inputs.level == 'both'))
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.level == 'full' || github.event.inputs.level == 'both'))
     name: full / verify / node ${{ matrix.node }}
-    runs-on: ${{ env.CI_RUNNER }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        node: ${{ fromJSON(env.NODE_VERSION_MATRIX) }}
+        node:
+          - 22
+          - 24
     steps:
       - uses: actions/checkout@v4
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: ${{ env.PNPM_VERSION }}
+          version: 10.23.0
           run_install: false
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -158,21 +154,21 @@ jobs:
       github.event_name == 'pull_request' ||
       github.event_name == 'push' ||
       github.event_name == 'schedule' ||
-      (github.event_name == 'workflow_dispatch' && (inputs.level == 'full' || inputs.level == 'both'))
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.level == 'full' || github.event.inputs.level == 'both'))
     name: full / coverage (node 22)
-    runs-on: ${{ env.CI_RUNNER }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: ${{ env.PNPM_VERSION }}
+          version: 10.23.0
           run_install: false
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION_PRIMARY }}
+          node-version: 22
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - name: Install dependencies
@@ -192,21 +188,21 @@ jobs:
       github.event_name == 'pull_request' ||
       github.event_name == 'push' ||
       github.event_name == 'schedule' ||
-      (github.event_name == 'workflow_dispatch' && (inputs.level == 'full' || inputs.level == 'both'))
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.level == 'full' || github.event.inputs.level == 'both'))
     name: full / packaged integration smoke
-    runs-on: ${{ env.CI_RUNNER }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: ${{ env.PNPM_VERSION }}
+          version: 10.23.0
           run_install: false
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION_PRIMARY }}
+          node-version: 22
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - name: Install dependencies
