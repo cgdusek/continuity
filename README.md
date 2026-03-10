@@ -4,6 +4,31 @@ External OpenClaw continuity context-engine plugin package.
 
 This repository contains the plugin implementation for continuity capture, review, persistence, recall, and operator controls.
 
+## Plugin Functionality
+
+- Capture durable continuity candidates from user/assistant turns and classify them as `fact`, `preference`, `decision`, or `open_loop`.
+- Route captured items into `approved` or `pending` review state based on source-class capture mode and review settings.
+- Persist a per-agent continuity store under `<stateDir>/agents/<agentId>/continuity/store.json`.
+- Materialize approved continuity items into workspace markdown files under `memory/continuity/`.
+- Rank and inject approved continuity items into prompt build as untrusted historical context when the Continuity slot is active and recall scope allows it.
+- Expose operator controls through gateway methods, a `continuity` CLI namespace, and the plugin dashboard at `/plugins/continuity`.
+
+## Dashboard UI
+
+The plugin ships a built-in dashboard route:
+
+- `GET/POST /plugins/continuity`
+
+The dashboard provides:
+
+- Continuity slot activation/deactivation
+- Agent-scoped record browsing
+- Capture and recall configuration controls
+- Pending review actions (`approve`, `reject`, `remove`)
+- Approved-item management (`remove`)
+
+Dashboard control details are documented in [docs/dashboard-ui.md](docs/dashboard-ui.md).
+
 ## What This Package Registers
 
 - Plugin metadata (`id: continuity`, `kind: context-engine`) from `dist/index.js`
@@ -132,4 +157,5 @@ CI is defined in `.github/workflows/ci.yml`.
 - Gateway API: [docs/gateway-api.md](docs/gateway-api.md)
 - Configuration: [docs/configuration.md](docs/configuration.md)
 - Development and CI: [docs/development-and-ci.md](docs/development-and-ci.md)
+- Dashboard UI: [docs/dashboard-ui.md](docs/dashboard-ui.md)
 - Repository map: [docs/repo-map.md](docs/repo-map.md)
