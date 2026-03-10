@@ -42,7 +42,7 @@ jobs:
   smoke-build:
     if: >-
       github.event_name == 'workflow_dispatch' &&
-      (inputs.level == 'smoke' || inputs.level == 'both')
+      (github.event.inputs.level == 'smoke' || github.event.inputs.level == 'both')
     name: smoke / build + typecheck
     runs-on: ${{ env.CI_RUNNER }}
     timeout-minutes: 15
@@ -69,7 +69,7 @@ jobs:
   smoke-unit:
     if: >-
       github.event_name == 'workflow_dispatch' &&
-      (inputs.level == 'smoke' || inputs.level == 'both')
+      (github.event.inputs.level == 'smoke' || github.event.inputs.level == 'both')
     name: smoke / unit
     runs-on: ${{ env.CI_RUNNER }}
     timeout-minutes: 15
@@ -94,7 +94,7 @@ jobs:
   smoke-e2e:
     if: >-
       github.event_name == 'workflow_dispatch' &&
-      (inputs.level == 'smoke' || inputs.level == 'both')
+      (github.event.inputs.level == 'smoke' || github.event.inputs.level == 'both')
     name: smoke / packaged integration smoke
     runs-on: ${{ env.CI_RUNNER }}
     timeout-minutes: 15
@@ -123,7 +123,7 @@ jobs:
       github.event_name == 'pull_request' ||
       github.event_name == 'push' ||
       github.event_name == 'schedule' ||
-      (github.event_name == 'workflow_dispatch' && (inputs.level == 'full' || inputs.level == 'both'))
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.level == 'full' || github.event.inputs.level == 'both'))
     name: full / verify / node ${{ matrix.node }}
     runs-on: ${{ env.CI_RUNNER }}
     timeout-minutes: 20
@@ -158,7 +158,7 @@ jobs:
       github.event_name == 'pull_request' ||
       github.event_name == 'push' ||
       github.event_name == 'schedule' ||
-      (github.event_name == 'workflow_dispatch' && (inputs.level == 'full' || inputs.level == 'both'))
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.level == 'full' || github.event.inputs.level == 'both'))
     name: full / coverage (node 22)
     runs-on: ${{ env.CI_RUNNER }}
     timeout-minutes: 20
@@ -192,7 +192,7 @@ jobs:
       github.event_name == 'pull_request' ||
       github.event_name == 'push' ||
       github.event_name == 'schedule' ||
-      (github.event_name == 'workflow_dispatch' && (inputs.level == 'full' || inputs.level == 'both'))
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.level == 'full' || github.event.inputs.level == 'both'))
     name: full / packaged integration smoke
     runs-on: ${{ env.CI_RUNNER }}
     timeout-minutes: 20
