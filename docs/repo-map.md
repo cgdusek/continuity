@@ -32,11 +32,12 @@
 - `engine.ts`: context-engine adapter (`afterTurn` capture + compact delegation)
 - `errors.ts`: shared gateway error code helpers
 - `extractor.ts`: heuristic continuity extraction + prompt-injection filtering
+- `identity.ts`: same-user direct-session binding + scope resolution
 - `index.ts`: continuity module exports
 - `json-files.ts`: atomic JSON/text write helpers + async lock
 - `route.ts`: `/plugins/continuity` dashboard GET/POST handler
 - `scope.ts`: source class and recall scope policy checks
-- `service.ts`: continuity store, review, materialization, and recall assembly
+- `service.ts`: scoped continuity storage, recent direct-history storage, review, materialization, and prompt assembly
 - `session-key.ts`: agent/session parsing + workspace resolution
 - `types.ts`: continuity type surface
 

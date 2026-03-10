@@ -874,4 +874,216 @@ describe("ContinuityService", () => {
       fs.readFile(path.join(workspaceDir, "memory", "continuity", "facts.md"), "utf8"),
     ).resolves.toContain("Source: unknown");
   });
+
+  it("isolates approved continuity by bound subject across direct channels", async () => {
+    const service = makeService(undefined, {
+      capture: {
+        pairedDirect: "auto",
+      },
+      identity: {
+        mode: "explicit",
+        bindings: [
+          {
+            subjectId: "alice",
+            matches: [{ keyPrefix: "discord:direct:alice" }],
+          },
+          {
+            subjectId: "bob",
+            matches: [{ keyPrefix: "telegram:direct:bob" }],
+          },
+        ],
+      },
+    });
+
+    await service.captureTurn({
+      sessionId: "session-alice",
+      sessionKey: "discord:direct:alice",
+      messages: [makeMessage("Remember this: my timezone is America/Chicago.")],
+    });
+    await service.captureTurn({
+      sessionId: "session-bob",
+      sessionKey: "telegram:direct:bob",
+      messages: [makeMessage("Remember this: deadline is Friday.")],
+    });
+
+    const alicePrompt = await service.buildSystemPromptAddition({
+      sessionKey: "discord:direct:alice",
+      messages: [makeMessage("What is my timezone?")],
+    });
+    const bobPrompt = await service.buildSystemPromptAddition({
+      sessionKey: "telegram:direct:bob",
+      messages: [makeMessage("What is my deadline?")],
+    });
+
+    expect(alicePrompt).toContain("America/Chicago");
+    expect(alicePrompt).not.toContain("Friday");
+    expect(bobPrompt).toContain("Friday");
+    expect(bobPrompt).not.toContain("America/Chicago");
+
+    await expect(
+      fs.readFile(path.join(workspaceDir, "memory", "continuity", "subjects", "alice", "facts.md"), "utf8"),
+    ).resolves.toContain("America/Chicago");
+    await expect(
+      fs.readFile(path.join(workspaceDir, "memory", "continuity", "subjects", "bob", "facts.md"), "utf8"),
+    ).resolves.toContain("Friday");
+  });
+
+  it("captures recent direct context across bound channels even when durable capture is off", async () => {
+    const service = makeService(undefined, {
+      capture: {
+        pairedDirect: "off",
+      },
+      identity: {
+        mode: "single_user",
+        defaultDirectSubjectId: "owner",
+      },
+      recent: {
+        enabled: true,
+        maxExcerpts: 4,
+        maxChars: 600,
+        ttlHours: 24,
+      },
+    });
+
+    await service.captureTurn({
+      sessionId: "wa-1",
+      sessionKey: "whatsapp:direct:owner",
+      messages: [
+        makeMessage("Need to move launch to Friday."),
+        makeMessage("I will keep that in mind.", "assistant"),
+      ],
+    });
+
+    const prompt = await service.buildSystemPromptAddition({
+      sessionKey: "webchat:direct:owner",
+      messages: [makeMessage("What's the latest message you got on WA?")],
+    });
+
+    expect(prompt).toContain("<recent-direct-context>");
+    expect(prompt).toContain("Need to move launch to Friday.");
+    expect(prompt).toContain("whatsapp:direct:owner user");
+    expect(prompt).not.toContain("<continuity>");
+
+    await expect(service.recent({ subjectId: "owner" })).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          subjectId: "owner",
+          sessionKey: "whatsapp:direct:owner",
+        }),
+      ]),
+    );
+  });
+
+  it("keeps unmatched explicit direct sessions session-scoped and skips markdown materialization", async () => {
+    const service = makeService(undefined, {
+      capture: {
+        pairedDirect: "auto",
+      },
+      identity: {
+        mode: "explicit",
+        bindings: [],
+      },
+    });
+
+    const created = await service.captureTurn({
+      sessionId: "guest-1",
+      sessionKey: "discord:direct:guest",
+      messages: [makeMessage("Remember this: my timezone is America/Chicago.")],
+    });
+
+    expect(created[0]).toEqual(
+      expect.objectContaining({
+        scopeKind: "session",
+        subjectId: undefined,
+        reviewState: "approved",
+        filePath: undefined,
+      }),
+    );
+
+    const samePrompt = await service.buildSystemPromptAddition({
+      sessionKey: "discord:direct:guest",
+      messages: [makeMessage("What is my timezone?")],
+    });
+    const otherPrompt = await service.buildSystemPromptAddition({
+      sessionKey: "telegram:direct:guest",
+      messages: [makeMessage("What is my timezone?")],
+    });
+
+    expect(samePrompt).toContain("America/Chicago");
+    expect(otherPrompt).toBeUndefined();
+    await expect(
+      fs.access(path.join(workspaceDir, "memory", "continuity", "facts.md")),
+    ).rejects.toThrow();
+
+    const createdRecord = created[0];
+    if (!createdRecord) {
+      throw new Error("missing session-scoped record");
+    }
+    await expect(service.explain({ id: createdRecord.id })).resolves.toEqual({
+      record: expect.objectContaining({
+        id: createdRecord.id,
+        scopeKind: "session",
+      }),
+      markdownPath: undefined,
+    });
+  });
+
+  it("migrates legacy direct records into the default subject in single-user mode", async () => {
+    await writeStore([
+      {
+        id: "cont_legacy_direct",
+        kind: "fact",
+        text: "Remember this: my timezone is America/Chicago.",
+        normalizedText: "remember this: my timezone is america/chicago.",
+        confidence: 1,
+        sourceClass: "main_direct",
+        source: {
+          role: "user",
+          sessionKey: "main",
+          sessionId: "session-main",
+          excerpt: "Remember this: my timezone is America/Chicago.",
+        },
+        createdAt: 1,
+        updatedAt: 1,
+        reviewState: "approved",
+        approvedAt: 1,
+        filePath: "memory/continuity/facts.md",
+      },
+    ]);
+    const service = makeService(undefined, {
+      identity: {
+        mode: "single_user",
+        defaultDirectSubjectId: "owner",
+      },
+    });
+
+    const records = await service.list();
+    expect(records[0]).toEqual(
+      expect.objectContaining({
+        scopeKind: "subject",
+        subjectId: "owner",
+        filePath: "memory/continuity/subjects/owner/facts.md",
+      }),
+    );
+
+    const prompt = await service.buildSystemPromptAddition({
+      sessionKey: "telegram:direct:owner",
+      messages: [makeMessage("What is my timezone?")],
+    });
+
+    expect(prompt).toContain("America/Chicago");
+
+    await expect(service.patch({ id: "cont_legacy_direct", action: "approve" })).resolves.toEqual({
+      ok: true,
+      record: expect.objectContaining({
+        filePath: "memory/continuity/subjects/owner/facts.md",
+      }),
+    });
+    await expect(
+      fs.readFile(
+        path.join(workspaceDir, "memory", "continuity", "subjects", "owner", "facts.md"),
+        "utf8",
+      ),
+    ).resolves.toContain("America/Chicago");
+  });
 });

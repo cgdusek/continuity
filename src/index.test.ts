@@ -14,6 +14,8 @@ import plugin from "./index.js";
 type MockService = {
   status: ReturnType<typeof vi.fn>;
   list: ReturnType<typeof vi.fn>;
+  subjects: ReturnType<typeof vi.fn>;
+  recent: ReturnType<typeof vi.fn>;
   patch: ReturnType<typeof vi.fn>;
   explain: ReturnType<typeof vi.fn>;
   buildSystemPromptAddition: ReturnType<typeof vi.fn>;
@@ -24,6 +26,8 @@ function makeService(): MockService {
   return {
     status: vi.fn(),
     list: vi.fn(),
+    subjects: vi.fn(),
+    recent: vi.fn(),
     patch: vi.fn(),
     explain: vi.fn(),
     buildSystemPromptAddition: vi.fn(),
@@ -135,7 +139,9 @@ describe("continuity plugin", () => {
       "continuity.explain",
       "continuity.list",
       "continuity.patch",
+      "continuity.recent",
       "continuity.status",
+      "continuity.subjects",
     ]);
     expect(cli).toHaveLength(1);
     expect(cli[0]?.opts).toEqual({ commands: ["continuity"] });
@@ -223,6 +229,8 @@ describe("continuity plugin", () => {
         state: "approved",
         kind: "preference",
         sourceClass: "main_direct",
+        scopeKind: undefined,
+        subjectId: undefined,
         limit: 7,
       },
     });
@@ -236,6 +244,8 @@ describe("continuity plugin", () => {
         state: undefined,
         kind: undefined,
         sourceClass: undefined,
+        scopeKind: undefined,
+        subjectId: undefined,
         limit: 9,
       },
     });
@@ -254,6 +264,8 @@ describe("continuity plugin", () => {
         state: undefined,
         kind: undefined,
         sourceClass: undefined,
+        scopeKind: undefined,
+        subjectId: undefined,
         limit: undefined,
       },
     });
@@ -264,6 +276,46 @@ describe("continuity plugin", () => {
       undefined,
       { code: "UNAVAILABLE", message: "Error: list failed" },
     ]);
+  });
+
+  it("registers subject and recent read methods", async () => {
+    const service = makeService();
+    service.subjects.mockResolvedValue([{ subjectId: "owner" }]);
+    service.recent.mockResolvedValue([{ id: "recent_1" }]);
+    createContinuityServiceMock.mockReturnValue(service);
+
+    const { api, methods } = createApi({ slotSelected: true });
+    plugin.register(api as never);
+
+    const subjectsHandler = methods.get("continuity.subjects");
+    const recentHandler = methods.get("continuity.recent");
+    if (!subjectsHandler || !recentHandler) {
+      throw new Error("missing handlers");
+    }
+
+    await expect(callMethod(subjectsHandler, { agentId: "alpha", limit: "5" })).resolves.toEqual([
+      true,
+      [{ subjectId: "owner" }],
+    ]);
+    expect(service.subjects).toHaveBeenCalledWith({
+      agentId: "alpha",
+      limit: 5,
+    });
+
+    await expect(
+      callMethod(recentHandler, {
+        agentId: "alpha",
+        subjectId: "owner",
+        sessionKey: "discord:direct:owner",
+        limit: "3",
+      }),
+    ).resolves.toEqual([true, [{ id: "recent_1" }]]);
+    expect(service.recent).toHaveBeenCalledWith({
+      agentId: "alpha",
+      subjectId: "owner",
+      sessionKey: "discord:direct:owner",
+      limit: 3,
+    });
   });
 
   it("validates continuity.patch and continuity.explain payloads", async () => {
