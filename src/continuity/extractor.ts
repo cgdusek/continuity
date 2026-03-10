@@ -35,7 +35,7 @@ function sanitizeText(text: string, role: "user" | "assistant"): string {
   return normalizeSpaces(base);
 }
 
-function looksLikePromptInjection(text: string): boolean {
+export function isPromptInjectionShaped(text: string): boolean {
   return PROMPT_INJECTION_PATTERNS.some((pattern) => pattern.test(text));
 }
 
@@ -72,7 +72,7 @@ function matchContinuity(text: string, role: "user" | "assistant"): ContinuityEx
   // For user messages, inspect raw normalized text before tag stripping so
   // <system>/<developer> styled injection payloads do not bypass filtering.
   const injectionProbe = role === "user" ? normalizeSpaces(text) : normalized;
-  if (looksLikePromptInjection(injectionProbe)) {
+  if (isPromptInjectionShaped(injectionProbe)) {
     return [];
   }
   const matches: ContinuityExtractionMatch[] = [];

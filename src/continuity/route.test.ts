@@ -61,6 +61,22 @@ function createHarness(options?: { initialConfig?: Record<string, unknown> }) {
               autoApproveMain: true,
               requireSource: true,
             },
+            identity: {
+              mode: "hybrid",
+              defaultDirectSubjectId: "owner",
+              bindings: [
+                {
+                  subjectId: "owner",
+                  matches: [{ keyPrefix: "discord:direct:owner" }],
+                },
+              ],
+            },
+            recent: {
+              enabled: true,
+              maxExcerpts: 6,
+              maxChars: 1200,
+              ttlHours: 24,
+            },
             recall: {
               maxItems: 4,
               includeOpenLoops: true,
@@ -78,13 +94,32 @@ function createHarness(options?: { initialConfig?: Record<string, unknown> }) {
   const writes: unknown[] = [];
 
   const service = {
-    status: vi.fn().mockResolvedValue({ slotSelected: true }),
+    status: vi.fn().mockResolvedValue({
+      slotSelected: true,
+      counts: { pending: 1, approved: 1, rejected: 0 },
+      identity: {
+        mode: "hybrid",
+        defaultDirectSubjectId: "owner",
+        bindings: [],
+      },
+      recent: {
+        enabled: true,
+        maxExcerpts: 6,
+        maxChars: 1200,
+        ttlHours: 24,
+      },
+      subjectCount: 1,
+      recentSubjectCount: 1,
+      legacyUnscopedDirectCount: 0,
+    }),
     list: vi
       .fn()
       .mockResolvedValueOnce([
         {
           id: "cont_1",
           kind: "fact",
+          subjectId: "owner",
+          scopeKind: "subject",
           text: "my timezone is America/Chicago",
           source: {
             sessionKey: "main",
@@ -96,6 +131,8 @@ function createHarness(options?: { initialConfig?: Record<string, unknown> }) {
         {
           id: "cont_2",
           kind: "preference",
+          subjectId: "owner",
+          scopeKind: "subject",
           text: "I prefer terse updates",
           source: {
             sessionKey: "main",
@@ -103,6 +140,17 @@ function createHarness(options?: { initialConfig?: Record<string, unknown> }) {
           },
         },
       ]),
+    subjects: vi.fn().mockResolvedValue([
+      {
+        subjectId: "owner",
+        approvedCount: 1,
+        pendingCount: 1,
+        rejectedCount: 0,
+        recentCount: 2,
+        lastSeenAt: Date.now(),
+        sessionKeys: ["discord:direct:owner", "main"],
+      },
+    ]),
     patch: vi.fn().mockResolvedValue({ ok: true }),
   };
 
@@ -206,6 +254,12 @@ describe("continuity route", () => {
         captureMinConfidence: "0.61",
         reviewAutoApproveMain: "false",
         reviewRequireSource: "false",
+        identityMode: "single_user",
+        identityDefaultDirectSubjectId: "operator",
+        recentEnabled: "false",
+        recentMaxExcerpts: "5",
+        recentMaxChars: "900",
+        recentTtlHours: "12",
         recallMaxItems: "6",
         recallIncludeOpenLoops: "false",
       }).toString(),
@@ -232,6 +286,17 @@ describe("continuity route", () => {
       review: {
         autoApproveMain: false,
         requireSource: false,
+      },
+      identity: {
+        mode: "single_user",
+        defaultDirectSubjectId: "operator",
+        bindings: [{ subjectId: "owner", matches: [{ keyPrefix: "discord:direct:owner" }] }],
+      },
+      recent: {
+        enabled: false,
+        maxExcerpts: 5,
+        maxChars: 900,
+        ttlHours: 12,
       },
       recall: {
         maxItems: 6,
@@ -300,6 +365,16 @@ describe("continuity route", () => {
         autoApproveMain: true,
         requireSource: true,
       },
+      identity: {
+        mode: "hybrid",
+        defaultDirectSubjectId: "owner",
+      },
+      recent: {
+        enabled: false,
+        maxExcerpts: 6,
+        maxChars: 1200,
+        ttlHours: 24,
+      },
       recall: {
         includeOpenLoops: true,
       },
@@ -349,6 +424,17 @@ describe("continuity route", () => {
       review: {
         autoApproveMain: false,
         requireSource: false,
+      },
+      identity: {
+        mode: "off",
+        defaultDirectSubjectId: "owner",
+        bindings: [],
+      },
+      recent: {
+        enabled: false,
+        maxExcerpts: 6,
+        maxChars: 1200,
+        ttlHours: 24,
       },
       recall: {
         maxItems: 4,

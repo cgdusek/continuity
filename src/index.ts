@@ -10,6 +10,7 @@ import {
   type ContinuityKind,
   type ContinuityPatchAction,
   type ContinuityReviewState,
+  type ContinuityScopeKind,
   type ContinuitySourceClass,
 } from "./continuity/index.js";
 
@@ -72,6 +73,15 @@ function readSourceFilter(
 function readPatchAction(params: Record<string, unknown>): ContinuityPatchAction | undefined {
   const value = readOptionalString(params, "action");
   return value === "approve" || value === "reject" || value === "remove" ? value : undefined;
+}
+
+function readScopeFilter(
+  params: Record<string, unknown>,
+): ContinuityScopeKind | "all" | undefined {
+  const value = readOptionalString(params, "scopeKind");
+  return value === "agent" || value === "subject" || value === "session" || value === "all"
+    ? value
+    : undefined;
 }
 
 function sendInvalid(respond: GatewayRequestHandlerOptions["respond"], message: string) {
@@ -150,6 +160,8 @@ const plugin = {
               state: readStateFilter(params),
               kind: readKindFilter(params),
               sourceClass: readSourceFilter(params),
+              scopeKind: readScopeFilter(params),
+              subjectId: readOptionalString(params, "subjectId"),
               limit: readOptionalPositiveInt(params, "limit"),
             },
           });
@@ -211,6 +223,38 @@ const plugin = {
             );
             return;
           }
+          respond(true, result);
+        } catch (error) {
+          respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(error)));
+        }
+      },
+    );
+
+    api.registerGatewayMethod(
+      "continuity.subjects",
+      async ({ params, respond }: GatewayRequestHandlerOptions) => {
+        try {
+          const result = await ensureService().subjects({
+            agentId: readOptionalString(params, "agentId"),
+            limit: readOptionalPositiveInt(params, "limit"),
+          });
+          respond(true, result);
+        } catch (error) {
+          respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(error)));
+        }
+      },
+    );
+
+    api.registerGatewayMethod(
+      "continuity.recent",
+      async ({ params, respond }: GatewayRequestHandlerOptions) => {
+        try {
+          const result = await ensureService().recent({
+            agentId: readOptionalString(params, "agentId"),
+            subjectId: readOptionalString(params, "subjectId"),
+            sessionKey: readOptionalString(params, "sessionKey"),
+            limit: readOptionalPositiveInt(params, "limit"),
+          });
           respond(true, result);
         } catch (error) {
           respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(error)));

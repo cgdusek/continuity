@@ -32,6 +32,34 @@
       "label": "Require Source",
       "help": "Require a source excerpt before an item can be approved."
     },
+    "identity.mode": {
+      "label": "Identity Mode",
+      "help": "How direct sessions are bound to the same human for continuity scope."
+    },
+    "identity.defaultDirectSubjectId": {
+      "label": "Default Subject",
+      "help": "Fallback subject id for single-user and hybrid direct-session binding."
+    },
+    "identity.bindings": {
+      "label": "Subject Bindings",
+      "help": "Declarative same-user direct-session binding rules."
+    },
+    "recent.enabled": {
+      "label": "Recent Direct Context",
+      "help": "Capture and inject a small rolling direct-history window for bound same-user sessions."
+    },
+    "recent.maxExcerpts": {
+      "label": "Recent Excerpts",
+      "help": "Maximum recent cross-channel direct excerpts injected per prompt."
+    },
+    "recent.maxChars": {
+      "label": "Recent Char Budget",
+      "help": "Character budget for recent cross-channel direct-history injection."
+    },
+    "recent.ttlHours": {
+      "label": "Recent TTL Hours",
+      "help": "How long recent direct-history excerpts remain eligible for recall."
+    },
     "recall.maxItems": {
       "label": "Max Recall Items",
       "help": "Maximum number of approved continuity items injected per prompt."
@@ -92,6 +120,80 @@
           "requireSource": {
             "type": "boolean",
             "default": true
+          }
+        }
+      },
+      "identity": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": ["off", "single_user", "explicit", "hybrid"],
+            "default": "off"
+          },
+          "defaultDirectSubjectId": {
+            "type": "string",
+            "default": "owner"
+          },
+          "bindings": {
+            "type": "array",
+            "default": [],
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "subjectId": {
+                  "type": "string"
+                },
+                "matches": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "channel": {
+                        "type": "string"
+                      },
+                      "keyPrefix": {
+                        "type": "string"
+                      },
+                      "rawKeyPrefix": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "recent": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": false
+          },
+          "maxExcerpts": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 12,
+            "default": 6
+          },
+          "maxChars": {
+            "type": "integer",
+            "minimum": 200,
+            "maximum": 4000,
+            "default": 1200
+          },
+          "ttlHours": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 168,
+            "default": 24
           }
         }
       },

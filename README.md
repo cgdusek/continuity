@@ -7,10 +7,13 @@ This repository contains the plugin implementation for continuity capture, revie
 ## Plugin Functionality
 
 - Capture durable continuity candidates from user/assistant turns and classify them as `fact`, `preference`, `decision`, or `open_loop`.
+- Resolve direct sessions to agent, subject, or isolated session scope using opt-in same-user binding rules.
+- Capture a small rolling recent direct-history window for bound same-user sessions when `recent.enabled` is on.
 - Route captured items into `approved` or `pending` review state based on source-class capture mode and review settings.
 - Persist a per-agent continuity store under `<stateDir>/agents/<agentId>/continuity/store.json`.
-- Materialize approved continuity items into workspace markdown files under `memory/continuity/`.
+- Materialize approved continuity items into workspace markdown files under `memory/continuity/` and `memory/continuity/subjects/<subjectId>/`.
 - Rank and inject approved continuity items into prompt build as untrusted historical context when the Continuity slot is active and recall scope allows it.
+- Inject recent cross-channel direct excerpts as inert `<recent-direct-context>` when the current direct session resolves to a bound same-user subject.
 - Expose operator controls through gateway methods, a `continuity` CLI namespace, and the plugin dashboard at `/plugins/continuity`.
 
 ## Dashboard UI
@@ -36,21 +39,28 @@ Dashboard control details are documented in [docs/dashboard-ui.md](docs/dashboar
 - Gateway methods:
   - `continuity.status`
   - `continuity.list`
-  - `continuity.patch`
-  - `continuity.explain`
+- `continuity.patch`
+- `continuity.explain`
+- `continuity.subjects`
+- `continuity.recent`
 - CLI namespace `continuity` with commands:
   - `status`
   - `review`
   - `approve <id>`
   - `reject <id>`
   - `rm <id>`
+  - `subjects`
+  - `recent`
 - HTTP dashboard route: `GET/POST /plugins/continuity`
-- Prompt hook: `before_prompt_build` (adds `<continuity>...</continuity>` context when slot is active)
+- Prompt hook: `before_prompt_build` (adds `<recent-direct-context>...</recent-direct-context>` and `<continuity>...</continuity>` context when slot is active)
 - Plugin manifest + config schema: `openclaw.plugin.json`
 
 ## Runtime Behavior (High Level)
 
 - Extracts durable continuity candidates from user/assistant turn text.
+- Resolves direct sessions into `agent`, `subject`, or `session` scope depending on `identity.mode` and configured bindings.
+- Stores recent bound direct-history excerpts in:
+  - `<stateDir>/agents/<agentId>/continuity/recent.json`
 - Persists per-agent continuity store at:
   - `<stateDir>/agents/<agentId>/continuity/store.json`
 - Keeps approved items materialized into workspace markdown files:
@@ -58,8 +68,13 @@ Dashboard control details are documented in [docs/dashboard-ui.md](docs/dashboar
   - `memory/continuity/preferences.md`
   - `memory/continuity/decisions.md`
   - `memory/continuity/open-loops.md`
+- Keeps approved subject-scoped items materialized into:
+  - `memory/continuity/subjects/<subjectId>/facts.md`
+  - `memory/continuity/subjects/<subjectId>/preferences.md`
+  - `memory/continuity/subjects/<subjectId>/decisions.md`
+  - `memory/continuity/subjects/<subjectId>/open-loops.md`
 - Supports pending/approved/rejected review states and patch actions (`approve`, `reject`, `remove`).
-- Builds recall snippets from approved items and prepends them during prompt build when scope rules allow.
+- Builds recent direct-history and durable continuity snippets from the current scope and prepends them during prompt build when scope rules allow.
 
 ## Requirements
 

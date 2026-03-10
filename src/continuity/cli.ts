@@ -1,7 +1,12 @@
 import type { Command } from "commander";
 import { defaultRuntime } from "./runtime.js";
 import type { ContinuityService } from "./service.js";
-import type { ContinuityKind, ContinuityReviewState, ContinuitySourceClass } from "./types.js";
+import type {
+  ContinuityKind,
+  ContinuityReviewState,
+  ContinuityScopeKind,
+  ContinuitySourceClass,
+} from "./types.js";
 
 function printPayload(payload: unknown, json?: boolean) {
   if (json) {
@@ -43,6 +48,8 @@ export function registerContinuityCli(params: {
       "Source filter: main_direct|paired_direct|group|channel|all",
       "all",
     )
+    .option("--scope <scope>", "Scope filter: agent|subject|session|all", "all")
+    .option("--subject <id>", "Subject id filter")
     .option("--limit <n>", "Result limit", "50")
     .option("--json", "JSON output", false)
     .action(
@@ -51,6 +58,8 @@ export function registerContinuityCli(params: {
         state?: ContinuityReviewState | "all";
         kind?: ContinuityKind | "all";
         source?: ContinuitySourceClass | "all";
+        scope?: ContinuityScopeKind | "all";
+        subject?: string;
         limit: string;
         json?: boolean;
       }) => {
@@ -61,6 +70,8 @@ export function registerContinuityCli(params: {
             state: opts.state,
             kind: opts.kind,
             sourceClass: opts.source,
+            scopeKind: opts.scope,
+            subjectId: opts.subject,
             limit: Number.parseInt(opts.limit, 10) || 50,
           },
         });
@@ -86,4 +97,44 @@ export function registerContinuityCli(params: {
   registerPatch("approve", "approve");
   registerPatch("reject", "reject");
   registerPatch("rm", "remove");
+
+  continuity
+    .command("subjects")
+    .option("--agent <id>", "Agent id")
+    .option("--limit <n>", "Result limit", "50")
+    .option("--json", "JSON output", false)
+    .action(async (opts: { agent?: string; limit: string; json?: boolean }) => {
+      const service = await params.ensureService();
+      const result = await service.subjects({
+        agentId: opts.agent,
+        limit: Number.parseInt(opts.limit, 10) || 50,
+      });
+      printPayload(result, opts.json);
+    });
+
+  continuity
+    .command("recent")
+    .option("--agent <id>", "Agent id")
+    .option("--subject <id>", "Subject id")
+    .option("--session <key>", "Resolve the subject from a session key")
+    .option("--limit <n>", "Result limit", "50")
+    .option("--json", "JSON output", false)
+    .action(
+      async (opts: {
+        agent?: string;
+        subject?: string;
+        session?: string;
+        limit: string;
+        json?: boolean;
+      }) => {
+        const service = await params.ensureService();
+        const result = await service.recent({
+          agentId: opts.agent,
+          subjectId: opts.subject,
+          sessionKey: opts.session,
+          limit: Number.parseInt(opts.limit, 10) || 50,
+        });
+        printPayload(result, opts.json);
+      },
+    );
 }

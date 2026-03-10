@@ -161,4 +161,115 @@ describe("resolveContinuityConfig", () => {
       rules: [undefined, { action: "allow", match: undefined }],
     });
   });
+
+  it("adds same-user identity and recent defaults", () => {
+    const resolved = resolveContinuityConfig();
+
+    expect(resolved.identity).toEqual({
+      mode: "off",
+      defaultDirectSubjectId: "owner",
+      bindings: [],
+    });
+    expect(resolved.recent).toEqual({
+      enabled: false,
+      maxExcerpts: 6,
+      maxChars: 1200,
+      ttlHours: 24,
+    });
+  });
+
+  it("normalizes identity bindings and recent limits", () => {
+    const resolved = resolveContinuityConfig({
+      identity: {
+        mode: "hybrid",
+        defaultDirectSubjectId: " Owner ",
+        bindings: [
+          {
+            subjectId: " Alice Smith ",
+            matches: [
+              {
+                channel: "Discord",
+                keyPrefix: " Agent:Alpha:Discord:Direct:Alice ",
+                rawKeyPrefix: " Agent:Alpha:Discord:Direct:Alice ",
+              },
+            ],
+          },
+        ],
+      },
+      recent: {
+        enabled: true,
+        maxExcerpts: 99,
+        maxChars: 9999,
+        ttlHours: 999,
+      },
+    });
+
+    expect(resolved.identity).toEqual({
+      mode: "hybrid",
+      defaultDirectSubjectId: "owner",
+      bindings: [
+        {
+          subjectId: "alice-smith",
+          matches: [
+            {
+              channel: "discord",
+              keyPrefix: "agent:alpha:discord:direct:alice",
+              rawKeyPrefix: "agent:alpha:discord:direct:alice",
+            },
+          ],
+        },
+      ],
+    });
+    expect(resolved.recent).toEqual({
+      enabled: true,
+      maxExcerpts: 12,
+      maxChars: 4000,
+      ttlHours: 168,
+    });
+  });
+
+  it("falls back for too-small recent integers and drops invalid bindings", () => {
+    const resolved = resolveContinuityConfig({
+      identity: {
+        bindings: [
+          undefined,
+          "bad-binding" as unknown as never,
+          {
+            subjectId: " ",
+          },
+          {
+            subjectId: "Owner",
+            matches: [
+              undefined,
+              "bad-match" as unknown as never,
+              {} as never,
+              { channel: "Discord" },
+            ],
+          },
+        ],
+      },
+      recent: {
+        maxExcerpts: 0,
+        maxChars: 100,
+        ttlHours: 0,
+      },
+    });
+
+    expect(resolved.identity.bindings).toEqual([
+      {
+        subjectId: "owner",
+        matches: [],
+      },
+      {
+        subjectId: "owner",
+        matches: [{ channel: "discord" }],
+      },
+    ]);
+    expect(resolved.recent).toEqual({
+      enabled: false,
+      maxExcerpts: 6,
+      maxChars: 1200,
+      ttlHours: 24,
+    });
+  });
 });

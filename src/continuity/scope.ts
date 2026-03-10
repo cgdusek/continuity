@@ -4,7 +4,7 @@ import {
 } from "./session-key.js";
 import type { ContinuitySourceClass, SessionSendPolicyConfig } from "./types.js";
 
-type ParsedContinuityScope = {
+export type ParsedContinuityScope = {
   channel?: string;
   chatType?: "channel" | "group" | "direct";
   normalizedKey?: string;
@@ -13,12 +13,12 @@ type ParsedContinuityScope = {
 const CONTINUITY_CHAT_TYPE_MARKERS = new Set(["group", "channel", "direct", "dm"]);
 
 export function isContinuitySubagentSession(sessionKey?: string): boolean {
-  const normalized = normalizeSessionRest(sessionKey);
+  const normalized = normalizeContinuitySessionRest(sessionKey);
   return Boolean(normalized?.startsWith("subagent:"));
 }
 
 export function classifyContinuitySource(sessionKey?: string): ContinuitySourceClass {
-  const rest = normalizeSessionRest(sessionKey) ?? "";
+  const rest = normalizeContinuitySessionRest(sessionKey) ?? "";
   if (rest.startsWith("subagent:")) {
     // Treat internal subagent runs as non-direct so continuity capture stays disabled.
     return "channel";
@@ -83,8 +83,8 @@ export function isContinuityScopeAllowed(
   return (scope.default ?? "allow") === "allow";
 }
 
-function parseContinuitySessionScope(key?: string): ParsedContinuityScope {
-  const normalized = normalizeSessionKey(key);
+export function parseContinuitySessionScope(key?: string): ParsedContinuityScope {
+  const normalized = normalizeContinuitySessionKey(key);
   if (!normalized) {
     return {};
   }
@@ -106,15 +106,15 @@ function parseContinuitySessionScope(key?: string): ParsedContinuityScope {
   return { normalizedKey: normalized, channel };
 }
 
-function normalizeSessionKey(key?: string): string | undefined {
-  const normalized = normalizeSessionRest(key);
+export function normalizeContinuitySessionKey(key?: string): string | undefined {
+  const normalized = normalizeContinuitySessionRest(key);
   if (!normalized || normalized.startsWith("subagent:")) {
     return undefined;
   }
   return normalized;
 }
 
-function normalizeSessionRest(key?: string): string | undefined {
+export function normalizeContinuitySessionRest(key?: string): string | undefined {
   if (!key) {
     return undefined;
   }

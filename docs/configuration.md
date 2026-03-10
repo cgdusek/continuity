@@ -22,6 +22,26 @@ Top-level schema is an object with `additionalProperties: false`.
 - `requireSource`: boolean (default: `true`)
 - object has `additionalProperties: false`
 
+## `identity`
+
+- `mode`: `off | single_user | explicit | hybrid` (default: `off`)
+- `defaultDirectSubjectId`: string (default: `owner`)
+- `bindings`: array of:
+  - `subjectId`: string
+  - `matches`: array of matcher objects with optional:
+    - `channel`
+    - `keyPrefix`
+    - `rawKeyPrefix`
+- object has `additionalProperties: false`
+
+## `recent`
+
+- `enabled`: boolean (default: `false`)
+- `maxExcerpts`: integer `1..12` (default: `6`)
+- `maxChars`: integer `200..4000` (default: `1200`)
+- `ttlHours`: integer `1..168` (default: `24`)
+- object has `additionalProperties: false`
+
 ## `recall`
 
 - `maxItems`: integer `1..12` (default: `4`)
@@ -39,10 +59,20 @@ Top-level schema is an object with `additionalProperties: false`.
   - accepts `0`
   - falls back when invalid/negative
   - clamps to `<= 1`
+- `identity.mode` accepts only `off|single_user|explicit|hybrid`
+- `identity.defaultDirectSubjectId` is normalized with the same sanitizer used for agent ids
+- `identity.bindings`:
+  - each binding `subjectId` is normalized
+  - each matcher is trimmed/lowercased
+  - first matching binding wins at runtime
 - `recall.maxItems`:
   - falls back when invalid/non-positive
   - truncates decimals
   - minimum `1`, maximum `12`
+- `recent.maxExcerpts`, `recent.maxChars`, and `recent.ttlHours`:
+  - fall back when invalid/out of range
+  - truncate decimals
+  - clamp to their documented max values
 - `recall.scope`:
   - deep-cloned from input
   - default policy when missing:
@@ -66,6 +96,13 @@ Top-level schema is an object with `additionalProperties: false`.
 - `capture.minConfidence`
 - `review.autoApproveMain`
 - `review.requireSource`
+- `identity.mode`
+- `identity.defaultDirectSubjectId`
+- `identity.bindings`
+- `recent.enabled`
+- `recent.maxExcerpts`
+- `recent.maxChars`
+- `recent.ttlHours`
 - `recall.maxItems`
 - `recall.includeOpenLoops`
 - `recall.scope`

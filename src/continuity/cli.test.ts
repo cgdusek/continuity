@@ -78,6 +78,8 @@ describe("registerContinuityCli", () => {
         state: "approved",
         kind: "decision",
         sourceClass: "paired_direct",
+        scopeKind: "all",
+        subjectId: undefined,
         limit: 7,
       },
     });
@@ -100,6 +102,8 @@ describe("registerContinuityCli", () => {
         state: "pending",
         kind: "all",
         sourceClass: "all",
+        scopeKind: "all",
+        subjectId: undefined,
         limit: 50,
       },
     });
@@ -119,8 +123,82 @@ describe("registerContinuityCli", () => {
         state: "pending",
         kind: "all",
         sourceClass: "all",
+        scopeKind: "all",
+        subjectId: undefined,
         limit: 50,
       },
+    });
+  });
+
+  it("supports review scope and subject filters plus subject and recent commands", async () => {
+    const logSpy = vi.spyOn(defaultRuntime, "log").mockImplementation(() => {});
+    const service = {
+      list: vi.fn().mockResolvedValue([]),
+      subjects: vi.fn().mockResolvedValue([{ subjectId: "owner" }]),
+      recent: vi.fn().mockResolvedValue([{ id: "recent_1" }]),
+    };
+    const program = makeProgram(service);
+
+    await program.parseAsync(
+      ["continuity", "review", "--scope", "subject", "--subject", "owner", "--json"],
+      { from: "user" },
+    );
+    await program.parseAsync(["continuity", "subjects", "--limit", "7", "--json"], {
+      from: "user",
+    });
+    await program.parseAsync(
+      ["continuity", "recent", "--subject", "owner", "--session", "discord:direct:owner", "--json"],
+      { from: "user" },
+    );
+
+    expect(service.list).toHaveBeenCalledWith({
+      agentId: undefined,
+      filters: {
+        state: "pending",
+        kind: "all",
+        sourceClass: "all",
+        scopeKind: "subject",
+        subjectId: "owner",
+        limit: 50,
+      },
+    });
+    expect(service.subjects).toHaveBeenCalledWith({
+      agentId: undefined,
+      limit: 7,
+    });
+    expect(service.recent).toHaveBeenCalledWith({
+      agentId: undefined,
+      subjectId: "owner",
+      sessionKey: "discord:direct:owner",
+      limit: 50,
+    });
+    expect(logSpy).toHaveBeenCalledWith(JSON.stringify([{ subjectId: "owner" }], null, 2));
+    expect(logSpy).toHaveBeenCalledWith(JSON.stringify([{ id: "recent_1" }], null, 2));
+  });
+
+  it("falls back to the default limit for subjects and recent when parsing fails", async () => {
+    const service = {
+      subjects: vi.fn().mockResolvedValue([]),
+      recent: vi.fn().mockResolvedValue([]),
+    };
+    const program = makeProgram(service);
+
+    await program.parseAsync(["continuity", "subjects", "--limit", "NaN", "--json"], {
+      from: "user",
+    });
+    await program.parseAsync(["continuity", "recent", "--limit", "NaN", "--json"], {
+      from: "user",
+    });
+
+    expect(service.subjects).toHaveBeenCalledWith({
+      agentId: undefined,
+      limit: 50,
+    });
+    expect(service.recent).toHaveBeenCalledWith({
+      agentId: undefined,
+      subjectId: undefined,
+      sessionKey: undefined,
+      limit: 50,
     });
   });
 

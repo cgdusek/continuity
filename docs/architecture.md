@@ -6,6 +6,8 @@ This plugin owns continuity behavior end to end:
 
 - capture durable items from turns
 - persist and review those items
+- resolve same-user direct-session scope
+- persist recent bound direct-history excerpts
 - materialize approved continuity markdown files
 - inject approved continuity context into prompt construction
 - expose gateway/CLI/HTTP controls for operators
@@ -35,8 +37,11 @@ Primary stateful domain service.
 
 - Store path per agent:
   - `<stateDir>/agents/<agentId>/continuity/store.json`
+- Recent-history store path per agent:
+  - `<stateDir>/agents/<agentId>/continuity/recent.json`
 - Store format:
-  - `{ version: 1, records: ContinuityRecord[] }`
+  - durable store: `{ version: 2, records: ContinuityRecord[] }`
+  - recent store: `{ version: 1, entries: ContinuityRecentEntry[] }`
 - Write model:
   - async lock (`createAsyncLock`) serializes mutations
   - atomic file writes (`writeJsonAtomic`, `writeTextAtomic`)
@@ -44,6 +49,8 @@ Primary stateful domain service.
   - `captureTurn`
   - `list`
   - `status`
+  - `subjects`
+  - `recent`
   - `patch`
   - `explain`
   - `buildSystemPromptAddition`
@@ -60,6 +67,7 @@ Context-engine adapter around service behavior.
 
 - `extractor.ts`: heuristic continuity extraction + prompt-injection pattern rejection.
 - `scope.ts`: source classification and recall scope policy evaluation.
+- `identity.ts`: agent/direct-session binding resolution into `agent | subject | session` scope.
 - `session-key.ts`: agent/session parsing and workspace resolution.
 
 ### HTTP Dashboard Route (`src/continuity/route.ts`)
@@ -79,10 +87,12 @@ Route: `/plugins/continuity`
 3. Service rejects capture when:
    - no `sessionKey`
    - subagent session
-   - capture mode for source class is `off`
+   - capture mode for source class is `off` for durable extraction only
 4. Extractor returns matches (`fact|preference|decision|open_loop`) with confidence.
-5. Service filters by `capture.minConfidence`.
-6. Service deduplicates by `kind + normalizedText`.
+5. Service resolves direct sessions into `agent`, `subject`, or isolated `session` scope.
+6. Service filters durable matches by `capture.minConfidence`.
+7. Service deduplicates durable records by `scopeId + kind + normalizedText`.
+8. When `recent.enabled` and the resolved scope is `subject`, service also stores sanitized recent direct-history excerpts from the new turn slice.
 7. Record is created as:
    - `approved` when mode is `auto` (with `review.autoApproveMain` guard for main direct)
    - otherwise `pending`
@@ -97,6 +107,9 @@ On each store mutation:
   - `memory/continuity/preferences.md`
   - `memory/continuity/decisions.md`
   - `memory/continuity/open-loops.md`
+  - `memory/continuity/subjects/<subjectId>/*.md` for subject-scoped records
+
+Session-scoped approved records are not materialized to workspace markdown.
 
 Managed content is bounded by:
 
@@ -116,7 +129,9 @@ Manual content outside managed blocks is preserved.
 
 Service recall behavior:
 
+- optionally emits `<recent-direct-context>` with sanitized recent bound direct-history excerpts from other session keys that resolve to the same subject
 - reads approved records only
+- filters approved records to the current `scopeId`
 - enforces `recall.scope` policy against `sessionKey`
 - ranks by prompt-token overlap, kind boost, confidence, then recency
 - emits up to `recall.maxItems` lines within a character budget

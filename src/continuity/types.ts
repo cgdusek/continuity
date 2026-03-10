@@ -24,6 +24,24 @@ export type ContinuityKind = "fact" | "preference" | "decision" | "open_loop";
 export type ContinuityReviewState = "pending" | "approved" | "rejected";
 export type ContinuityCaptureMode = "off" | "review" | "auto";
 export type ContinuitySourceClass = "main_direct" | "paired_direct" | "group" | "channel";
+export type ContinuityScopeKind = "agent" | "subject" | "session";
+export type ContinuityIdentityMode = "off" | "single_user" | "explicit" | "hybrid";
+
+export type ContinuityBindingMatch = {
+  channel?: string;
+  keyPrefix?: string;
+  rawKeyPrefix?: string;
+};
+
+export type ContinuitySubjectBinding = {
+  subjectId?: string;
+  matches?: Array<ContinuityBindingMatch | undefined>;
+};
+
+export type ResolvedContinuitySubjectBinding = {
+  subjectId: string;
+  matches: ContinuityBindingMatch[];
+};
 
 export type ContinuitySource = {
   role: "user" | "assistant";
@@ -39,6 +57,9 @@ export type ContinuityBaseRecord = {
   normalizedText: string;
   confidence: number;
   sourceClass: ContinuitySourceClass;
+  scopeKind: ContinuityScopeKind;
+  scopeId: string;
+  subjectId?: string;
   source: ContinuitySource;
   createdAt: number;
   updatedAt: number;
@@ -60,7 +81,7 @@ export type ContinuityRejected = ContinuityBaseRecord & {
 
 export type ContinuityItem = ContinuityBaseRecord & {
   reviewState: "approved";
-  filePath: string;
+  filePath?: string;
   approvedAt: number;
   rejectedAt?: undefined;
 };
@@ -70,7 +91,7 @@ export type ContinuityCandidate = ContinuityPending | ContinuityRejected;
 export type ContinuityRecord = ContinuityPending | ContinuityRejected | ContinuityItem;
 
 export type ContinuityStoreFile = {
-  version: 1;
+  version: 2;
   records: ContinuityRecord[];
 };
 
@@ -87,6 +108,19 @@ export type ContinuityReviewConfig = {
   requireSource?: boolean;
 };
 
+export type ContinuityIdentityConfig = {
+  mode?: ContinuityIdentityMode;
+  defaultDirectSubjectId?: string;
+  bindings?: Array<ContinuitySubjectBinding | undefined>;
+};
+
+export type ContinuityRecentConfig = {
+  enabled?: boolean;
+  maxExcerpts?: number;
+  maxChars?: number;
+  ttlHours?: number;
+};
+
 export type ContinuityRecallConfig = {
   maxItems?: number;
   includeOpenLoops?: boolean;
@@ -96,7 +130,22 @@ export type ContinuityRecallConfig = {
 export type ContinuityPluginConfig = {
   capture?: ContinuityCaptureConfig;
   review?: ContinuityReviewConfig;
+  identity?: ContinuityIdentityConfig;
+  recent?: ContinuityRecentConfig;
   recall?: ContinuityRecallConfig;
+};
+
+export type ResolvedContinuityIdentityConfig = {
+  mode: ContinuityIdentityMode;
+  defaultDirectSubjectId: string;
+  bindings: ResolvedContinuitySubjectBinding[];
+};
+
+export type ResolvedContinuityRecentConfig = {
+  enabled: boolean;
+  maxExcerpts: number;
+  maxChars: number;
+  ttlHours: number;
 };
 
 export type ResolvedContinuityConfig = {
@@ -111,6 +160,8 @@ export type ResolvedContinuityConfig = {
     autoApproveMain: boolean;
     requireSource: boolean;
   };
+  identity: ResolvedContinuityIdentityConfig;
+  recent: ResolvedContinuityRecentConfig;
   recall: {
     maxItems: number;
     includeOpenLoops: boolean;
@@ -122,6 +173,8 @@ export type ContinuityListFilters = {
   state?: ContinuityReviewState | "all";
   kind?: ContinuityKind | "all";
   sourceClass?: ContinuitySourceClass | "all";
+  scopeKind?: ContinuityScopeKind | "all";
+  subjectId?: string;
   limit?: number;
 };
 
@@ -131,10 +184,15 @@ export type ContinuityStatus = {
   counts: Record<ContinuityReviewState, number>;
   capture: ResolvedContinuityConfig["capture"];
   review: ResolvedContinuityConfig["review"];
+  identity: ResolvedContinuityIdentityConfig;
+  recent: ResolvedContinuityRecentConfig;
   recall: {
     maxItems: number;
     includeOpenLoops: boolean;
   };
+  subjectCount: number;
+  recentSubjectCount: number;
+  legacyUnscopedDirectCount: number;
 };
 
 export type ContinuityPatchAction = "approve" | "reject" | "remove";
@@ -150,6 +208,16 @@ export type ContinuityExplainResult = {
   markdownPath?: string;
 };
 
+export type ContinuitySubjectSummary = {
+  subjectId: string;
+  approvedCount: number;
+  pendingCount: number;
+  rejectedCount: number;
+  recentCount: number;
+  lastSeenAt?: number;
+  sessionKeys: string[];
+};
+
 export type ContinuityCaptureInput = {
   sessionKey?: string;
   sessionId: string;
@@ -161,4 +229,20 @@ export type ContinuityExtractionMatch = {
   text: string;
   confidence: number;
   role: "user" | "assistant";
+};
+
+export type ContinuityRecentEntry = {
+  id: string;
+  scopeId: string;
+  subjectId: string;
+  role: "user" | "assistant";
+  text: string;
+  sessionKey: string;
+  sessionId: string;
+  createdAt: number;
+};
+
+export type ContinuityRecentStoreFile = {
+  version: 1;
+  entries: ContinuityRecentEntry[];
 };

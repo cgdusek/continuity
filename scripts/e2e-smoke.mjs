@@ -76,7 +76,7 @@ plugin.register({
 });
 
 assert.equal(engines.has("continuity"), true);
-assert.equal(methods.size, 4);
+assert.equal(methods.size, 6);
 assert.equal(routes.length, 1);
 assert.equal(routes[0].path, "/plugins/continuity");
 assert.equal(routes[0].auth, "gateway");
@@ -112,6 +112,8 @@ const runCli = async (argv) => {
 
 assert.equal((await callMethod("continuity.status", { agentId: "alpha" }))[0], true);
 assert.equal((await callMethod("continuity.list", { kind: "preference", limit: "5" }))[0], true);
+assert.equal((await callMethod("continuity.subjects", { limit: "5" }))[0], true);
+assert.equal((await callMethod("continuity.recent", { subjectId: "owner", limit: "5" }))[0], true);
 assert.deepEqual(await callMethod("continuity.patch", { id: "cont_missing", action: "approve" }), [
   false,
   undefined,
@@ -241,6 +243,17 @@ assert.deepEqual(config.plugins?.entries?.continuity?.config, {
   review: {
     autoApproveMain: false,
     requireSource: false,
+  },
+  identity: {
+    mode: "off",
+    defaultDirectSubjectId: "owner",
+    bindings: [],
+  },
+  recent: {
+    enabled: false,
+    maxExcerpts: 6,
+    maxChars: 1200,
+    ttlHours: 24,
   },
   recall: {
     maxItems: 6,

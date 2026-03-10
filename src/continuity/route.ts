@@ -2,7 +2,12 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { OpenClawConfig, PluginLogger, PluginRuntime } from "openclaw/plugin-sdk";
 import { resolveContinuityConfig } from "./config.js";
 import type { ContinuityService } from "./service.js";
-import type { ContinuityCaptureMode } from "./types.js";
+import type {
+  ContinuityCaptureMode,
+  ContinuityIdentityMode,
+  ContinuityRecord,
+  ContinuitySubjectSummary,
+} from "./types.js";
 
 const CONTINUITY_ROUTE_PATH = "/plugins/continuity";
 
@@ -41,6 +46,18 @@ function parseCaptureMode(
   fallback: ContinuityCaptureMode,
 ): ContinuityCaptureMode {
   return value === "off" || value === "review" || value === "auto" ? value : fallback;
+}
+
+function parseIdentityMode(
+  value: string | null | undefined,
+  fallback: ContinuityIdentityMode,
+): ContinuityIdentityMode {
+  return value === "off" ||
+    value === "single_user" ||
+    value === "explicit" ||
+    value === "hybrid"
+    ? value
+    : fallback;
 }
 
 function escapeHtml(value: string): string {
@@ -123,15 +140,61 @@ function renderOption(value: ContinuityCaptureMode, selected: ContinuityCaptureM
   return `<option value="${value}"${value === selected ? " selected" : ""}>${value}</option>`;
 }
 
+function renderIdentityOption(value: ContinuityIdentityMode, selected: ContinuityIdentityMode): string {
+  return `<option value="${value}"${value === selected ? " selected" : ""}>${value}</option>`;
+}
+
+function renderBindings(bindings: ReturnType<typeof resolveContinuityConfig>["identity"]["bindings"]): string {
+  if (bindings.length === 0) {
+    return "<p>No explicit subject bindings configured.</p>";
+  }
+  return `<ul>${bindings
+    .map(
+      (binding) =>
+        `<li><strong>${escapeHtml(binding.subjectId)}</strong>: ${escapeHtml(
+          binding.matches
+            .map((match) =>
+              [match.channel ? `channel=${match.channel}` : undefined, match.keyPrefix, match.rawKeyPrefix]
+                .filter(Boolean)
+                .join(" "),
+            )
+            .join(" | "),
+        )}</li>`,
+    )
+    .join("")}</ul>`;
+}
+
+function renderSubjectRows(subjects: ContinuitySubjectSummary[]): string {
+  if (subjects.length === 0) {
+    return `<tr><td colspan="7"><em>None</em></td></tr>`;
+  }
+  return subjects
+    .map(
+      (subject) => `<tr>
+  <td><code>${escapeHtml(subject.subjectId)}</code></td>
+  <td>${subject.approvedCount}</td>
+  <td>${subject.pendingCount}</td>
+  <td>${subject.rejectedCount}</td>
+  <td>${subject.recentCount}</td>
+  <td>${subject.lastSeenAt ? escapeHtml(new Date(subject.lastSeenAt).toISOString()) : ""}</td>
+  <td>${escapeHtml(subject.sessionKeys.join(", "))}</td>
+</tr>`,
+    )
+    .join("\n");
+}
+
 function renderDashboard(params: {
   agentId?: string;
-  slotSelected: boolean;
+  subjectId?: string;
+  status: Awaited<ReturnType<ContinuityService["status"]>>;
   continuityConfig: ReturnType<typeof resolveContinuityConfig>;
+  subjects: ContinuitySubjectSummary[];
   pendingRows: string;
   approvedRows: string;
 }): string {
   const config = params.continuityConfig;
   const agentValue = params.agentId ? escapeHtml(params.agentId) : "";
+  const subjectValue = params.subjectId ? escapeHtml(params.subjectId) : "";
   return `<!doctype html>
 <html>
   <head>
@@ -156,7 +219,7 @@ function renderDashboard(params: {
         color: var(--text);
       }
       main {
-        max-width: 980px;
+        max-width: 1180px;
         margin: 0 auto;
         padding: 20px;
         display: grid;
@@ -172,7 +235,8 @@ function renderDashboard(params: {
       h2 {
         margin: 0 0 8px;
       }
-      p {
+      p,
+      li {
         color: var(--muted);
       }
       .row {
@@ -187,6 +251,17 @@ function renderDashboard(params: {
       }
       .grid.two {
         grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      }
+      .stats {
+        display: grid;
+        gap: 10px;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      }
+      .stat {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 12px;
+        background: #fbfdfb;
       }
       label {
         display: grid;
@@ -227,6 +302,9 @@ function renderDashboard(params: {
         border-radius: 4px;
         padding: 1px 4px;
       }
+      .muted {
+        color: var(--muted);
+      }
       @media (max-width: 700px) {
         main {
           padding: 10px;
@@ -238,13 +316,13 @@ function renderDashboard(params: {
     <main>
       <section>
         <h1>Continuity Dashboard</h1>
-        <p>Plugin-owned continuity controls and review workflow.</p>
+        <p>Plugin-owned continuity controls, same-user direct sharing summary, and review workflow.</p>
         <div class="row">
           <strong>Slot status:</strong>
-          <span>${params.slotSelected ? "active" : "inactive"}</span>
+          <span>${params.status.slotSelected ? "active" : "inactive"}</span>
           <form method="post">
-            <input type="hidden" name="action" value="${params.slotSelected ? "slot-disable" : "slot-enable"}" />
-            <button type="submit" class="secondary">${params.slotSelected ? "Deactivate slot" : "Activate slot"}</button>
+            <input type="hidden" name="action" value="${params.status.slotSelected ? "slot-disable" : "slot-enable"}" />
+            <button type="submit" class="secondary">${params.status.slotSelected ? "Deactivate slot" : "Activate slot"}</button>
           </form>
         </div>
       </section>
@@ -256,8 +334,24 @@ function renderDashboard(params: {
             Agent Id (optional)
             <input name="agent" value="${agentValue}" placeholder="main" />
           </label>
+          <label>
+            Subject Id (optional)
+            <input name="subject" value="${subjectValue}" placeholder="owner" />
+          </label>
           <button type="submit">Refresh</button>
         </form>
+      </section>
+
+      <section>
+        <h2>Summary</h2>
+        <div class="stats">
+          <div class="stat"><strong>Pending</strong><div>${params.status.counts.pending}</div></div>
+          <div class="stat"><strong>Approved</strong><div>${params.status.counts.approved}</div></div>
+          <div class="stat"><strong>Subjects</strong><div>${params.status.subjectCount}</div></div>
+          <div class="stat"><strong>Recent Subjects</strong><div>${params.status.recentSubjectCount}</div></div>
+          <div class="stat"><strong>Identity Mode</strong><div>${escapeHtml(params.status.identity.mode)}</div></div>
+          <div class="stat"><strong>Legacy Direct</strong><div>${params.status.legacyUnscopedDirectCount}</div></div>
+        </div>
       </section>
 
       <section>
@@ -294,27 +388,66 @@ function renderDashboard(params: {
                 ${renderOption("auto", config.capture.channel)}
               </select>
             </label>
+            <label>Identity mode
+              <select name="identityMode">
+                ${renderIdentityOption("off", config.identity.mode)}
+                ${renderIdentityOption("single_user", config.identity.mode)}
+                ${renderIdentityOption("explicit", config.identity.mode)}
+                ${renderIdentityOption("hybrid", config.identity.mode)}
+              </select>
+            </label>
+            <label>Default direct subject id
+              <input name="identityDefaultDirectSubjectId" value="${escapeHtml(config.identity.defaultDirectSubjectId)}" />
+            </label>
             <label>Min confidence
               <input type="number" name="captureMinConfidence" min="0" max="1" step="0.01" value="${config.capture.minConfidence}" />
             </label>
             <label>Max recall items
               <input type="number" name="recallMaxItems" min="1" max="12" step="1" value="${config.recall.maxItems}" />
             </label>
+            <label>Recent max excerpts
+              <input type="number" name="recentMaxExcerpts" min="1" max="12" step="1" value="${config.recent.maxExcerpts}" />
+            </label>
+            <label>Recent max chars
+              <input type="number" name="recentMaxChars" min="200" max="4000" step="1" value="${config.recent.maxChars}" />
+            </label>
+            <label>Recent TTL hours
+              <input type="number" name="recentTtlHours" min="1" max="168" step="1" value="${config.recent.ttlHours}" />
+            </label>
           </div>
           <div class="row">
             <label><input type="checkbox" name="reviewAutoApproveMain" value="true"${config.review.autoApproveMain ? " checked" : ""} /> Auto-approve main direct</label>
             <label><input type="checkbox" name="reviewRequireSource" value="true"${config.review.requireSource ? " checked" : ""} /> Require source</label>
             <label><input type="checkbox" name="recallIncludeOpenLoops" value="true"${config.recall.includeOpenLoops ? " checked" : ""} /> Include open loops</label>
+            <label><input type="checkbox" name="recentEnabled" value="true"${config.recent.enabled ? " checked" : ""} /> Enable recent direct context</label>
           </div>
           <button type="submit">Save settings</button>
         </form>
       </section>
 
       <section>
+        <h2>Subject Bindings</h2>
+        <p>Bindings are read-only in the dashboard. Edit them in config and use this page to verify that they loaded correctly.</p>
+        ${renderBindings(config.identity.bindings)}
+      </section>
+
+      <section>
+        <h2>Bound Subjects</h2>
+        <table>
+          <thead>
+            <tr><th>Subject</th><th>Approved</th><th>Pending</th><th>Rejected</th><th>Recent</th><th>Last Seen</th><th>Sessions</th></tr>
+          </thead>
+          <tbody>
+            ${renderSubjectRows(params.subjects)}
+          </tbody>
+        </table>
+      </section>
+
+      <section>
         <h2>Pending Review</h2>
         <table>
           <thead>
-            <tr><th>Id</th><th>Kind</th><th>Text</th><th>Source</th><th>Action</th></tr>
+            <tr><th>Id</th><th>Kind</th><th>Subject</th><th>Scope</th><th>Text</th><th>Source</th><th>Action</th></tr>
           </thead>
           <tbody>
             ${params.pendingRows}
@@ -326,7 +459,7 @@ function renderDashboard(params: {
         <h2>Approved</h2>
         <table>
           <thead>
-            <tr><th>Id</th><th>Kind</th><th>Text</th><th>Source</th><th>Action</th></tr>
+            <tr><th>Id</th><th>Kind</th><th>Subject</th><th>Scope</th><th>Text</th><th>Source</th><th>Action</th></tr>
           </thead>
           <tbody>
             ${params.approvedRows}
@@ -339,17 +472,13 @@ function renderDashboard(params: {
 }
 
 function renderRecordRows(params: {
-  records: Array<{
-    id: string;
-    kind: string;
-    text: string;
-    source: { sessionKey?: string; sessionId?: string };
-  }>;
+  records: ContinuityRecord[];
   agentId?: string;
+  subjectId?: string;
   actions: Array<{ value: string; label: string }>;
 }): string {
   if (params.records.length === 0) {
-    return `<tr><td colspan="5"><em>None</em></td></tr>`;
+    return `<tr><td colspan="7"><em>None</em></td></tr>`;
   }
   return params.records
     .map((record) => {
@@ -362,12 +491,15 @@ function renderRecordRows(params: {
       return `<tr>
   <td><code>${escapeHtml(record.id)}</code></td>
   <td>${escapeHtml(record.kind)}</td>
+  <td>${escapeHtml(record.subjectId ?? "")}</td>
+  <td>${escapeHtml(record.scopeKind)}</td>
   <td>${escapeHtml(record.text)}</td>
   <td>${escapeHtml(source)}</td>
   <td>
     <form method="post" class="row">
       <input type="hidden" name="id" value="${escapeHtml(record.id)}" />
       <input type="hidden" name="agent" value="${escapeHtml(params.agentId ?? "")}" />
+      <input type="hidden" name="subject" value="${escapeHtml(params.subjectId ?? "")}" />
       ${actionButtons}
     </form>
   </td>
@@ -410,6 +542,24 @@ async function handleSaveConfig(params: {
       requireSource: params.form.has("reviewRequireSource")
         ? parseBoolean(params.form.get("reviewRequireSource"), true)
         : false,
+    },
+    identity: {
+      mode: parseIdentityMode(params.form.get("identityMode"), continuityConfig.identity.mode),
+      defaultDirectSubjectId:
+        params.form.get("identityDefaultDirectSubjectId")?.trim() ||
+        continuityConfig.identity.defaultDirectSubjectId,
+      bindings: continuityConfig.identity.bindings,
+    },
+    recent: {
+      enabled: params.form.has("recentEnabled")
+        ? parseBoolean(params.form.get("recentEnabled"), true)
+        : false,
+      maxExcerpts: parseNumber(
+        params.form.get("recentMaxExcerpts"),
+        continuityConfig.recent.maxExcerpts,
+      ),
+      maxChars: parseNumber(params.form.get("recentMaxChars"), continuityConfig.recent.maxChars),
+      ttlHours: parseNumber(params.form.get("recentTtlHours"), continuityConfig.recent.ttlHours),
     },
     recall: {
       maxItems: parseNumber(params.form.get("recallMaxItems"), continuityConfig.recall.maxItems),
@@ -505,25 +655,30 @@ export function createContinuityRouteHandler(params: ContinuityRouteParams) {
     try {
       const requestUrl = new URL(req.url!, "http://localhost");
       const agentId = requestUrl.searchParams.get("agent")?.trim() || undefined;
+      const subjectId = requestUrl.searchParams.get("subject")?.trim() || undefined;
       const status = await params.service.status(agentId);
       const pending = await params.service.list({
         agentId,
-        filters: { state: "pending", limit: 50 },
+        filters: { state: "pending", subjectId, limit: 50 },
       });
       const approved = await params.service.list({
         agentId,
-        filters: { state: "approved", limit: 50 },
+        filters: { state: "approved", subjectId, limit: 50 },
       });
+      const subjects = await params.service.subjects({ agentId, limit: 50 });
       const config = params.runtime.config.loadConfig();
       const continuityConfig = resolveContinuityConfig(readPluginConfig(config));
 
       const html = renderDashboard({
         agentId,
-        slotSelected: status.slotSelected,
+        subjectId,
+        status,
         continuityConfig,
+        subjects,
         pendingRows: renderRecordRows({
           records: pending,
           agentId,
+          subjectId,
           actions: [
             { value: "approve", label: "Approve" },
             { value: "reject", label: "Reject" },
@@ -533,6 +688,7 @@ export function createContinuityRouteHandler(params: ContinuityRouteParams) {
         approvedRows: renderRecordRows({
           records: approved,
           agentId,
+          subjectId,
           actions: [{ value: "remove", label: "Remove" }],
         }),
       });
